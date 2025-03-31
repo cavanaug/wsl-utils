@@ -75,7 +75,7 @@ WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
 case "$1" in
 init)
     if [[ "$2" == "--help" ]]; then
-        echo "Usage: $0 init [--force]"
+        echo "Usage: $(basename $0) init [--force]"
         echo "  --force    Force initialization"
         exit 0
     fi
@@ -84,7 +84,7 @@ init)
     ;;
 register)
     if [[ "$2" == "--help" ]]; then
-        echo "Usage: $0 register --name <name>"
+        echo "Usage: $(basename $0) register --name <name>"
         echo "  --name     Specify the name for registration"
         exit 0
     fi
@@ -93,7 +93,7 @@ register)
     ;;
 update)
     if [[ "$2" == "--help" ]]; then
-        echo "Usage: $0 update [--check]"
+        echo "Usage: $(basename $0) update [--check]"
         echo "  --check    Check for updates"
         exit 0
     fi
@@ -101,7 +101,7 @@ update)
     update_command "$@"
     ;;
 --help)
-    echo "Usage: $0 {init|register|update} [options]"
+    echo "Usage: $(basename $0) {init|register|update} [options]"
     echo "Subcommands:"
     echo "  init       Initialize the WSL utility"
     echo "  register   Register the WSL utility"
@@ -109,7 +109,7 @@ update)
     exit 0
     ;;
 *)
-    echo "Usage: $0 {init|register|update} [options]"
+    echo "Usage: $(basename $0) {init|register|update} [options]"
     exit 1
     ;;
 esac
