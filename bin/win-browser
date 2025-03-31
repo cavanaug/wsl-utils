@@ -1,0 +1,48 @@
+#!/bin/bash
+#  ┌────────────────────────────────────────────────────────────────────────────────────────────────┐
+#  │                                                                                                │
+#  │    ██     ██ ██ ███    ██       ██████  ██████   ██████  ██     ██ ███████ ███████ ██████      │
+#  │    ██     ██ ██ ████   ██       ██   ██ ██   ██ ██    ██ ██     ██ ██      ██      ██   ██     │
+#  │    ██  █  ██ ██ ██ ██  ██ █████ ██████  ██████  ██    ██ ██  █  ██ ███████ █████   ██████      │
+#  │    ██ ███ ██ ██ ██  ██ ██       ██   ██ ██   ██ ██    ██ ██ ███ ██      ██ ██      ██   ██     │
+#  │     ███ ███  ██ ██   ████       ██████  ██   ██  ██████   ███ ███  ███████ ███████ ██   ██     │
+#  │                                                                                                │
+#  └────────────────────────────────────────────────────────────────────────────────────────────────┘
+#  win-browser
+#   - This script is used to open files, directories, uri's in the default Windows browser from WSL
+#   - It is best used in conjunction with the xdg-utils package and registering as the xdg-open default web-browser
+#   - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windows paths.
+
+# Set basic windows environment variables
+if [[ -z ${WIN_WINDIR+x} ]]; then
+    if [[ -d ${WIN_WINDIR} ]]; then
+        WIN_WINDIR='/mnt/c/Windows'
+    else
+        echo "WIN_WINDIR is not configured and I cant find WINDOWS"
+        exit 1
+    fi
+fi
+
+# Process the command line arguments and convert them to Windows paths as needed
+cliargs=()
+for i in "$@"; do
+    if [[ -f $i || -d $i ]]; then
+        cliargs+=("file:$(wslpath -m ${i})")
+    else
+        cliargs+=("${i}")
+    fi
+done
+
+# Determine the path to the current default windows browser
+# - yes this runtime detection is a bit slow, but is required to make things dynamic
+PROGID=$(${WIN_WINDIR}/System32/reg.exe QUERY 'HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' /s | awk 'gsub(/\r/,"")' | grep -i ProgId | sed -e 's/  */ /g' | cut -f4 -d' ')
+PROGPATH=$(${WIN_WINDIR}/System32/cmd.exe /C 'ftype' 2>/dev/null | grep "${PROGID}" | cut -f2 -d\")
+BROWSER=$(wslpath -u "${PROGPATH}")
+#BROWSER=/mnt/c/Program\ Files/BraveSoftware/Brave-Browser/Application/brave.exe
+
+# Launch the browser with the modified arguments
+# TODO: Add logging only if a debug flag is set
+mkdir -p ${HOME}/.local/state/wsl-utils
+echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wsl-utils/win-browser.log
+"${BROWSER}" "${cliargs[@]}"
+#powerShell.exe -NoProfile start $url
