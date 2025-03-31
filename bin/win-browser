@@ -42,7 +42,7 @@ BROWSER=$(wslpath -u "${PROGPATH}")
 
 # Launch the browser with the modified arguments
 # TODO: Add logging only if a debug flag is set
-mkdir -p ${HOME}/.local/state/wsl-utils
-echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wsl-utils/win-browser.log
+mkdir -p ${HOME}/.local/state/wslutil
+echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-browser.log
 "${BROWSER}" "${cliargs[@]}"
 #powerShell.exe -NoProfile start $url

@@ -1,11 +1,21 @@
 #!/bin/bash
+#  ┌───────────────────────────────────────────────────────────────────────┐
+#  │                                                                       │
+#  │    ██     ██ ██ ███    ██        ██████  ██████  ██████  ██    ██     │
+#  │    ██     ██ ██ ████   ██       ██      ██    ██ ██   ██  ██  ██      │
+#  │    ██  █  ██ ██ ██ ██  ██ █████ ██      ██    ██ ██████    ████       │
+#  │    ██ ███ ██ ██ ██  ██ ██       ██      ██    ██ ██         ██        │
+#  │     ███ ███  ██ ██   ████        ██████  ██████  ██         ██        │
+#  │                                                                       │
+#  └───────────────────────────────────────────────────────────────────────┘
+if [[ -z ${WIN_WINDIR+x} ]]; then
+    if [[ -d /mnt/c/Windows ]]; then
         WIN_WINDIR='/mnt/c/Windows'
     else
         echo "WIN_WINDIR is not configured and I cant find WINDOWS"
         exit 1
     fi
 fi
-echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wsl-utils/win-clipboard.log
-mkdir -p ${HOME}/.local/state/wsl-utils
-echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wsl-utils/win-clipboard.log
+mkdir -p ${HOME}/.local/state/wslutil
+echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
 "${WIN_WINDIR}/System32/clip.exe" "$@"

@@ -9,3 +9,107 @@
 #  │                                                               │
 #  │                                                               │
 #  └───────────────────────────────────────────────────────────────┘
+#
+
+# Function to handle 'init' subcommand
+init_command() {
+    echo "Initializing WSL utility..."
+    # Add argument processing for 'init' here
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --force)
+            echo "Force initialization enabled."
+            ;;
+        *)
+            echo "Unknown option for init: $1"
+            exit 1
+            ;;
+        esac
+        shift
+    done
+}
+
+# Function to handle 'register' subcommand
+register_command() {
+    echo "Registering WSL utility..."
+    # Add argument processing for 'register' here
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --name)
+            shift
+            echo "Registering with name: $1"
+            ;;
+        *)
+            echo "Unknown option for register: $1"
+            exit 1
+            ;;
+        esac
+        shift
+    done
+}
+
+# Function to handle 'update' subcommand
+update_command() {
+    echo "Updating WSL utility..."
+    # Add argument processing for 'update' here
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --fetch)
+            echo "Fetch but dont apply updates."
+            (cd $WSLUTIL_DIR && git fetch)
+            exit 0
+            ;;
+        *)
+            echo "Unknown option for update: $1"
+            exit 1
+            ;;
+        esac
+        shift
+    done
+    (cd $WSLUTIL_DIR && git pull)
+}
+
+WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
+
+# Parse CLI arguments and dispatch to subcommands
+case "$1" in
+init)
+    if [[ "$2" == "--help" ]]; then
+        echo "Usage: $0 init [--force]"
+        echo "  --force    Force initialization"
+        exit 0
+    fi
+    shift
+    init_command "$@"
+    ;;
+register)
+    if [[ "$2" == "--help" ]]; then
+        echo "Usage: $0 register --name <name>"
+        echo "  --name     Specify the name for registration"
+        exit 0
+    fi
+    shift
+    register_command "$@"
+    ;;
+update)
+    if [[ "$2" == "--help" ]]; then
+        echo "Usage: $0 update [--check]"
+        echo "  --check    Check for updates"
+        exit 0
+    fi
+    shift
+    update_command "$@"
+    ;;
+--help)
+    echo "Usage: $0 {init|register|update} [options]"
+    echo "Subcommands:"
+    echo "  init       Initialize the WSL utility"
+    echo "  register   Register the WSL utility"
+    echo "  update     Update the WSL utility"
+    exit 0
+    ;;
+*)
+    echo "Usage: $0 {init|register|update} [options]"
+    exit 1
+    ;;
+esac
