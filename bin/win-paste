@@ -1,24 +1,26 @@
 #!/bin/bash
 #  ┌──────────────────────────────────────────────────────────────────────────────┐
-#  │                                                                              │
-#  │    ██╗    ██╗██╗███╗   ██╗      ██████╗  █████╗ ███████╗████████╗███████╗    │
-#  │    ██║    ██║██║████╗  ██║      ██╔══██╗██╔══██╗██╔════╝╚══██╔══╝██╔════╝    │
-#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██████╔╝███████║███████╗   ██║   █████╗      │
-#  │    ██║███╗██║██║██║╚██╗██║╚════╝██╔═══╝ ██╔══██║╚════██║   ██║   ██╔══╝      │
-#  │    ╚███╔███╔╝██║██║ ╚████║      ██║     ██║  ██║███████║   ██║   ███████╗    │
-#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝      ╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝    │
+#  │                                                                              │
+#  │    ██     ██ ██ ███    ██       ██████   █████  ███████ ████████ ███████     │
+#  │    ██     ██ ██ ████   ██       ██   ██ ██   ██ ██         ██    ██          │
+#  │    ██  █  ██ ██ ██ ██  ██ █████ ██████  ███████ ███████    ██    █████       │
+#  │    ██ ███ ██ ██ ██  ██ ██       ██      ██   ██      ██    ██    ██          │
+#  │     ███ ███  ██ ██   ████       ██      ██   ██ ███████    ██    ███████     │
 #  │                                                                              │
 #  └──────────────────────────────────────────────────────────────────────────────┘
 #  win-paste
-#  - This tool is ONLY NEEDED if you are not able to utilize wslg (old win10 etc)
-#  - eval $(wslutil init) should configure the wslg properly that this should not be needed
-#
 #  - This script is used to paste the contents of the Windows clipboard into the current WSL terminal STDOUT
 #  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
-#  - wslutil checkhealth will tell you if you need this script or not
+#    - This can complicate things though if you are heavily using wayland apps, as wl-paste is a wayland tool
 #
-WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-
+if [[ -z ${WIN_WINDIR+x} ]]; then
+    if [[ -d /mnt/c/Windows ]]; then
+        WIN_WINDIR='/mnt/c/Windows'
+    else
+        echo "WIN_WINDIR is not configured and I cant find WINDOWS"
+        exit 1
+    fi
+fi
 # TODO: Add logging only if a debug flag is set
 mkdir -p ${HOME}/.local/state/wslutil
 echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
