@@ -1,0 +1,27 @@
+#!/bin/bash
+#  ┌────────────────────────────────────────────────────────────────────────┐
+#  │                                                                        │
+#  │    ██╗    ██╗██╗███╗   ██╗       ██████╗ ██████╗ ███████╗███╗   ██╗    │
+#  │    ██║    ██║██║████╗  ██║      ██╔═══██╗██╔══██╗██╔════╝████╗  ██║    │
+#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██║   ██║██████╔╝█████╗  ██╔██╗ ██║    │
+#  │    ██║███╗██║██║██║╚██╗██║╚════╝██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║    │
+#  │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╔╝██║     ███████╗██║ ╚████║    │
+#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝    │
+#  └────────────────────────────────────────────────────────────────────────┘
+#  - This script is used to open files or directories in Windows Explorer from WSL.
+#  - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windpaths.
+#  - It is equivalent to double-clicking on a file or directory in Windows.
+#
+WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+cliargs=()
+for i in "$@"; do
+    if [[ -f $i || -d $i ]]; then
+        # Anything that is a file or directory will be converted to a windows path
+        cliargs+=("file:$(wslpath -m ${i})")
+    else
+        cliargs+=("${i}")
+    fi
+done
+mkdir -p ${HOME}/.local/state/wslutil
+echo "win-open ${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-open.log
+"${WIN_WINDIR}/explorer.exe" "${cliargs[@]}"
