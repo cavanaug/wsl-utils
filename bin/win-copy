@@ -1,21 +1,23 @@
 #!/bin/bash
 #  ┌───────────────────────────────────────────────────────────────────────┐
 #  │                                                                       │
-#  │    ██     ██ ██ ███    ██        ██████  ██████  ██████  ██    ██     │
-#  │    ██     ██ ██ ████   ██       ██      ██    ██ ██   ██  ██  ██      │
-#  │    ██  █  ██ ██ ██ ██  ██ █████ ██      ██    ██ ██████    ████       │
-#  │    ██ ███ ██ ██ ██  ██ ██       ██      ██    ██ ██         ██        │
-#  │     ███ ███  ██ ██   ████        ██████  ██████  ██         ██        │
-#  │                                                                       │
+#  │    ██╗    ██╗██╗███╗   ██╗       ██████╗ ██████╗ ██████╗ ██╗   ██╗    │
+#  │    ██║    ██║██║████╗  ██║      ██╔════╝██╔═══██╗██╔══██╗╚██╗ ██╔╝    │
+#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██║     ██║   ██║██████╔╝ ╚████╔╝     │
+#  │    ██║███╗██║██║██║╚██╗██║╚════╝██║     ██║   ██║██╔═══╝   ╚██╔╝      │
+#  │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╗╚██████╔╝██║        ██║       │
+#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═════╝ ╚═╝        ╚═╝       │
+#  │                                                                       │
 #  └───────────────────────────────────────────────────────────────────────┘
-if [[ -z ${WIN_WINDIR+x} ]]; then
-    if [[ -d /mnt/c/Windows ]]; then
-        WIN_WINDIR='/mnt/c/Windows'
-    else
-        echo "WIN_WINDIR is not configured and I cant find WINDOWS"
-        exit 1
-    fi
-fi
+#  win-copy
+#  - This tool is ONLY NEEDED if you are not able to utilize wslg (old win10 etc)
+#  - eval $(wslutil init) should configure the wslg properly that this should not be needed
+#
+#  - This script is used to copy the WSL stdin to the Windows clipboard
+#  - It is best used to symlink wl-copy to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
+#  - wslutil checkhealth will tell you if you need this script or not
+#
+WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 mkdir -p ${HOME}/.local/state/wslutil
 echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
 "${WIN_WINDIR}/System32/clip.exe" "$@"

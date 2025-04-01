@@ -69,7 +69,8 @@ update_command() {
     (cd $WSLUTIL_DIR && git pull)
 }
 
-WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
+#WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
+WSLUTIL_DIR="$(dirname $(dirname $0))"
 
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
