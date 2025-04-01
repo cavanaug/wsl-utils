@@ -22,4 +22,9 @@ WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 # TODO: Add logging only if a debug flag is set
 mkdir -p ${HOME}/.local/state/wslutil
 echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
-"${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -command '[Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))'
+if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-paste ]]; then
+    # If WSL2 GUI apps are enabled, use wl-copy instead of clip.exe
+    /usr/bin/wl-paste "$@"
+else
+    "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -command '[Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))'
+fi
