@@ -19,10 +19,10 @@
 #
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 mkdir -p ${HOME}/.local/state/wslutil
-echo "$(date --rfc-3339=s) - [$(ps -p $PPID -o cmd= | cut -f1 -d' ')] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
 if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-copy ]]; then
-    # If WSL2 GUI apps are enabled, use wl-copy instead of clip.exe
+    echo "$(date --rfc-3339=s) - /usr/bin/wl-copy [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
     /usr/bin/wl-copy "$@"
 else
+    echo "$(date --rfc-3339=s) - win-copy script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
     "${WIN_WINDIR}/System32/clip.exe" "$@"
 fi
