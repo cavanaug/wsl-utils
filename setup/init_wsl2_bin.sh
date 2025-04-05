@@ -10,7 +10,7 @@ XDG_CACHE_HOME=${XDG_CACHE_HOME:-"${HOME}/.cache"}
 WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-"/mnt/c/Program Files"}
 WIN_PROGRAMFILES_X86=${WIN_PROGRAMFILES_X86:-"/mnt/c/Program Files (x86)"}
 
-PROGRAMS="${XDG_CACHE_HOME}/wslutils/programs"
+PROGRAMS="${XDG_CACHE_HOME}/wslutil/programs"
 mkdir -p "$(dirname $PROGRAMS)"
 #rm -f $PROGRAMS # Remove cache
 # Clear out the programs file if it older than 1 day (Cached for dev/debugging)
@@ -46,6 +46,7 @@ notepad.exe
 systeminfo.exe
 taskkill.exe
 tasklist.exe
+taskmgr.exe
 
 # Windows Extras
 # - Generally for gui apps just utilize win-open <file> to open the file in the default app

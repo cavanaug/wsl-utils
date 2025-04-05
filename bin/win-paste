@@ -10,12 +10,14 @@
 #  │                                                                              │
 #  └──────────────────────────────────────────────────────────────────────────────┘
 #  win-paste
-#  - This tool is ONLY NEEDED if you are not able to utilize wslg (old win10 etc)
 #  - eval $(wslutil init) should configure the wslg properly that this should not be needed
 #
 #  - This script is used to paste the contents of the Windows clipboard into the current WSL terminal STDOUT
 #  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
+#  - This tool will also properly strip ^M characters from the clipboard contents, which will happen when copying multiline text from Windows applications.
 #  - wslutil checkhealth will tell you if you need this script or not
+#
+# Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
 #
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 
@@ -23,7 +25,7 @@ WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 mkdir -p ${HOME}/.local/state/wslutil
 if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-paste ]]; then
     echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
-    /usr/bin/wl-paste "$@"
+    /usr/bin/wl-paste "$@" | tr -d '\r'
 else
     echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
     "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -command '[Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))'
