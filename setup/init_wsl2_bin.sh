@@ -61,6 +61,7 @@ notepad++.exe
 brave.exe
 librewolf.exe
 firefox.exe
+chrome.exe
 EOF
 )"
 #
