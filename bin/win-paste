@@ -10,8 +10,6 @@
 #  │                                                                              │
 #  └──────────────────────────────────────────────────────────────────────────────┘
 #  win-paste
-#  - eval $(wslutil init) should configure the wslg properly that this should not be needed
-#
 #  - This script is used to paste the contents of the Windows clipboard into the current WSL terminal STDOUT
 #  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
 #  - This tool will also properly strip ^M characters from the clipboard contents, which will happen when copying multiline text from Windows applications.

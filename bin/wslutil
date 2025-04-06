@@ -14,12 +14,12 @@
 
 # Function to handle 'init' subcommand
 init_command() {
-    echo "Initializing WSL utility..."
     # Add argument processing for 'init' here
     while [[ $# -gt 0 ]]; do
         case "$1" in
-        --force)
-            echo "Force initialization enabled."
+        --bash)
+            echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
+            cat ${WSLUTIL_DIR}/env/init.bash
             ;;
         *)
             echo "Unknown option for init: $1"
@@ -73,12 +73,17 @@ update_command() {
 #WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
 WSLUTIL_DIR="$(dirname $(dirname $0))"
 
+if [[ -z ${WSL_DISTRO_NAME+x} ]]; then
+    echo "Error: Not running within WSL"
+    exit 1
+fi
+
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
 init)
     if [[ "$2" == "--help" ]]; then
         echo "Usage: $(basename $0) init [--force]"
-        echo "  --force    Force initialization"
+        echo "  --bash    Bash initialization"
         exit 0
     fi
     shift

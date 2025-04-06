@@ -3,3 +3,5 @@ bin/code-insiders
 bin/wl-copy
 bin/code
 bin/wl-paste
+.aider*
+.envrc
