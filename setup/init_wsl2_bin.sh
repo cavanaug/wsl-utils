@@ -19,53 +19,67 @@ if [[ -f $PROGRAMS ]]; then
         rm -f $PROGRAMS
     fi
 fi
+
 # Create the programs file if it does not exist
+echo "Building cache of Windows executables (please wait)"
 if [[ ! -f $PROGRAMS ]]; then
     # Faster to build up a list of programs and then search for them invdividually
-    find "${WIN_PROGRAMFILES}" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
-    find "${WIN_PROGRAMFILES_X86}" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
+    for i in "${WIN_PROGRAMFILES}" "${WIN_PROGRAMFILES_X86}" "${WIN_USERPROFILE}/AppData/Local/Programs/"; do
+        echo "    Scanning ${i}"
+        find "${i}" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
+    done
+    echo "    DONE: Processing complete"
+
+else
+    echo "    DONE: Using cached results"
+#    find "${WIN_PROGRAMFILES}" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
+#    find "${WIN_PROGRAMFILES_X86}" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
+#    find "${WIN_USERPROFILE}/AppData/Local/Programs/" -type f -iname "*.exe" 2> /dev/null >> $PROGRAMS
 fi
+echo
 # Variables to make this complete standalone
 cmd_func() { "${WIN_WINDIR:-/mnt/c/Windows}/System32/cmd.exe" /c $@; }
 
-EXES="$(
-    sed -e 's/#.*$//g' << EOF | sort -u
-# Windows Built In
-# - These are the default windows commands that I want to be able to run from WSL
-# - Beware though that file arguments may not work as expected unless you use the windows path
-explorer.exe
-msedge.exe
-cmd.exe
-powerShell.exe       # Used a slightly different name to avoid handling in git-browse
-SUDO.exe
-ipconfig.exe
-netsh.exe
-reg.exe
-regedit.exe
-notepad.exe
-systeminfo.exe
-taskkill.exe
-tasklist.exe
-taskmgr.exe
+EXES="$(yq -rPoj .winexe[] ./winutil.yml)"
 
-# Windows Extras
-# - Generally for gui apps just utilize win-open <file> to open the file in the default app
-# - Dont put applications like Word/Excel/Acrobat in here unless you dont want to use the default app
-curl.exe             # Sometimes used to test network connectivity & proxy
-winget.exe           # Doesnt work right due to needing elevated permissions for changes
-wt.exe
-wsl.exe
-gsudo.exe            # gsudo is a sudo replacement for windows that theoretically works with wsl
-powertoys.awake.exe
-notepad++.exe
-brave.exe
-librewolf.exe
-firefox.exe
-chrome.exe
-EOF
-)"
+# EXES="$(
+#     sed -e 's/#.*$//g' << EOF | sort -u
+# # Windows Built In
+# # - These are the default windows commands that I want to be able to run from WSL
+# # - Beware though that file arguments may not work as expected unless you use the windows path
+# explorer.exe
+# msedgea.exe
+# cmd.exe
+# powerShell.exe       # Used a slightly different name to avoid handling in git-browse
+# SUDO.exe
+# ipconfig.exe
+# netsh.exe
+# reg.exe
+# regedit.exe
+# notepad.exe
+# systeminfo.exe
+# taskkill.exe
+# tasklist.exe
+# taskmgr.exe
 #
+# # Windows Extras
+# # - Generally for gui apps just utilize win-open <file> to open the file in the default app
+# # - Dont put applications like Word/Excel/Acrobat in here unless you dont want to use the default app
+# curl.exe             # Sometimes used to test network connectivity & proxy
+# winget.exe           # Doesnt work right due to needing elevated permissions for changes
+# wt.exe
+# wsl.exe
+# gsudo.exe            # gsudo is a sudo replacement for windows that theoretically works with wsl
+# powertoys.awake.exe
+# notepad++.exe
+# brave.exe
+# librewolf.exe
+# firefox.exe
+# EOF
+# )"
+
 # Add any windows commands that are in the path that you want easily accessible here
+echo "Building symlinks in wslutil/bin"
 for i in ${EXES}; do
     # Search first for the exe in the default windows path in order to preserve any PATH ordering prefernces
     exe="$(wslpath $(cmd_func "where $i" 2> /dev/null | strings | head -1) 2> /dev/null)"
@@ -80,16 +94,16 @@ for i in ${EXES}; do
         #base=$(basename "$exe")
         base=$i
         if [[ -L "${WSLUTIL_DIR}/bin/${base}" && ! -e "${WSLUTIL_DIR}/bin/${base}" ]]; then
-            echo "WARN: Deleting bad symlink ${WSLUTIL_DIR}/bin/${base}"
+            echo "    WARN: Deleting bad symlink ${WSLUTIL_DIR}/bin/${base}"
             rm -f "${WSLUTIL_DIR}/bin/${base}"
         fi
         if [[ ! -L "${WSLUTIL_DIR}/bin/${base}" ]]; then
-            echo "DONE: Linked ${exe} to ${WSLUTIL_DIR}/bin/${base}"
+            echo "    DONE: Linked ${exe} to ${WSLUTIL_DIR}/bin/${base}"
             #ln -s "$exe" ${WSLUTIL_DIR}/bin/${base%%.exe}
             ln -s "$exe" "${WSLUTIL_DIR}/bin/${base}"
         fi
     else
-        echo "WARN: Unable to find \"$i\" in path"
+        echo "    WARN: Unable to find \"$i\" in path"
     fi
 done
 
