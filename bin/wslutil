@@ -22,7 +22,7 @@ init_command() {
             cat ${WSLUTIL_DIR}/env/init.bash
             ;;
         *)
-            echo "Unknown option for init: $1"
+            echo "Unknown option for init: $1" >/dev/null
             exit 1
             ;;
         esac
@@ -41,7 +41,7 @@ register_command() {
             echo "Registering with name: $1"
             ;;
         *)
-            echo "Unknown option for register: $1"
+            echo "Unknown option for register: $1" >/dev/null
             exit 1
             ;;
         esac
@@ -61,7 +61,7 @@ update_command() {
             exit 0
             ;;
         *)
-            echo "Unknown option for update: $1"
+            echo "Unknown option for update: $1" >/dev/null
             exit 1
             ;;
         esac
