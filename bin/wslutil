@@ -19,7 +19,7 @@ init_command() {
         case "$1" in
         --bash)
             echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
-            cat ${WSLUTIL_DIR}/env/init.bash
+            cat "${WSLUTIL_DIR}/env/init.bash"
             ;;
         *)
             echo "Unknown option for init: $1" >/dev/null
@@ -70,8 +70,9 @@ update_command() {
     (cd $WSLUTIL_DIR && git pull)
 }
 
-#WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
-WSLUTIL_DIR="$(dirname $(dirname $0))"
+# SHould make this a test if environment variable is set but doesnt match the the grandparent then error out.
+# WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
+WSLUTIL_DIR="$(dirname $(dirname "$0"))"
 
 if [[ -z ${WSL_DISTRO_NAME+x} ]]; then
     echo "Error: Not running within WSL"
