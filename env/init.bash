@@ -8,15 +8,9 @@ if [[ ! ":$PATH:" == *":${WSLUTIL_DIR}/bin:"* ]]; then
     export PATH="${WSLUTIL_DIR}/bin:${PATH}"
 fi
 
+# TODO: Create wsl vars here based on XDG variables if set, else use the defaults.  These vars should then be used in the rest of the script and unset at the end to avoid environment pollution.
 mkdir -p "${HOME}/.cache/wslutil"
 mkdir -p "${HOME}/.local/state/wslutil"
-
-# Mount this WSL distro's root directory under /mnt/wsl
-if ! mountpoint -q "/mnt/wsl/${WSL_DISTRO_NAME}"; then
-    mkdir -p "/mnt/wsl/${WSL_DISTRO_NAME}"
-    # HACK:  Clever way to avoid the need to use sudo to run a command
-    wsl.exe -d "${WSL_DISTRO_NAME}" -u root mount --bind / "/mnt/wsl/${WSL_DISTRO_NAME}/"
-fi
 
 # WSL2-specific environment variables and functions
 declare WIN_ENV_FILE="${HOME}/.cache/wslutil/env"
@@ -29,6 +23,8 @@ if [[ ! -f "${WIN_COMSPEC}" ]]; then
 fi
 
 # Set some global environment variables for WINDOWS for use in any cli usage
+# WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
+# - Any directories in these variables will be converted to WSL format
 declare -g -A -x WIN_ENV
 ${WIN_COMSPEC} /c "set" 2> /dev/null | tr -d '\r' | sed -e 's/[\d128-\d255]//g' -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > $WIN_ENV_FILE
 declare line=""
@@ -77,9 +73,9 @@ if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then
     # Fix the scaling for high DPI displays in WSL2 GUI apps
     if command -v wayland-info > /dev/null; then
         if [[ "$(wayland-info | grep refresh | cut -f2 -d' ')" -ge 3840 ]]; then
-            export GDK_SCALE=${GDK_SCALE:-1}
-            export GDK_DPI_SCALE=${GDK_DPI_SCALE:-1}
-            export QT_SCALE_FACTOR=${QT_SCALE_FACTOR:-1}
+            export GDK_SCALE=${GDK_SCALE:-1.5}
+            export GDK_DPI_SCALE=${GDK_DPI_SCALE:-1.5}
+            export QT_SCALE_FACTOR=${QT_SCALE_FACTOR:-1.5}
         fi
     fi
 else
