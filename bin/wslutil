@@ -12,22 +12,17 @@
 # wslutil - Windows Subsystem for Linux utility
 #
 
-# Function to handle 'init' subcommand
-init_command() {
-    # Add argument processing for 'init' here
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-        --bash)
-            echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
-            cat "${WSLUTIL_DIR}/env/init.bash"
-            ;;
-        *)
-            echo "Unknown option for init: $1" >/dev/null
-            exit 1
-            ;;
-        esac
-        shift
-    done
+# Function to handle 'shellenv' subcommand
+shellenv_command() {
+    # Add argument processing for 'shellenv' here
+    SHELLENV=$(basename $SHELL)
+    if [[ -f "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}" ]]; then
+        echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
+        cat "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}"
+    else
+        echo "ERROR: Shellenv file not found for ${SHELLENV}" >&2
+        exit 1
+    fi
 }
 
 # Function to handle 'register' subcommand
@@ -49,19 +44,19 @@ register_command() {
     done
 }
 
-# Function to handle 'update' subcommand
-update_command() {
+# Function to handle 'upgrade' subcommand
+upgrade_command() {
     echo "Updating WSL utility..."
-    # Add argument processing for 'update' here
+    # Add argument processing for 'upgrade' here
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --fetch)
-            echo "Fetch but dont apply updates."
+            echo "Fetch but dont apply upgrades."
             (cd $WSLUTIL_DIR && git fetch)
             exit 0
             ;;
         *)
-            echo "Unknown option for update: $1" >/dev/null
+            echo "Unknown option for upgrade: $1" >/dev/null
             exit 1
             ;;
         esac
@@ -81,14 +76,13 @@ fi
 
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
-init)
+shellenv)
     if [[ "$2" == "--help" ]]; then
-        echo "Usage: $(basename $0) init [--force]"
-        echo "  --bash    Bash initialization"
+        echo "Usage: $(basename $0) shellenv"
         exit 0
     fi
     shift
-    init_command "$@"
+    shellenv_command "$@"
     ;;
 register)
     if [[ "$2" == "--help" ]]; then
@@ -99,25 +93,38 @@ register)
     shift
     register_command "$@"
     ;;
-update)
+upgrade)
     if [[ "$2" == "--help" ]]; then
-        echo "Usage: $(basename $0) update [--check]"
-        echo "  --check    Check for updates"
+        echo "Usage: $(basename $0) upgrade [--check]"
+        echo "  --check    Check for upgrades"
         exit 0
     fi
     shift
-    update_command "$@"
+    upgrade_command "$@"
     ;;
 --help)
-    echo "Usage: $(basename $0) {init|register|update} [options]"
+    echo "Usage: $(basename $0) {shellenv|register|upgrade} [options]"
     echo "Subcommands:"
-    echo "  init       Initialize the WSL utility"
-    echo "  register   Register the WSL utility"
-    echo "  update     Update the WSL utility"
+    echo "  doctor     Run a health check on the wslutil environment"
+    echo "  shellenv   Setup the shell environment (eval the output)"
+    echo "  shim       Create/Update windows command shims in the wsutil bin directory"
+    echo "  setup      Setup & Install wslutil system environment (utilizes sudo)"
+    echo "  upgrade    Upgrade the WSL utility in place"
+    if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|shellenv|shim|setup|upgrade)')"; then
+        printf "\nExtra Subcommands:\n"
+        for i in $extras; do
+            echo "  $i (as wslutil-$i)"
+        done
+    fi
     exit 0
     ;;
 *)
-    echo "Usage: $(basename $0) {init|register|update} [options]"
-    exit 1
+    if command -v wslutil-$1 >/dev/null 2>&1; then
+        wslutil-$1 "$@"
+        exit 0
+    else
+        echo "Usage: $(basename $0) [options] {doctor|shellenv|shim|setup|upgrade}"
+        exit 1
+    fi
     ;;
 esac

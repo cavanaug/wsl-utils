@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+#
+# ┌───────────────────────────────────────────────────────────┐
+# │                       WSLUTIL                             │
+# │                                                           │
+# │    ██████╗  ██████╗  ██████╗████████╗ ██████╗ ██████╗     │
+# │    ██╔══██╗██╔═══██╗██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗    │
+# │    ██║  ██║██║   ██║██║        ██║   ██║   ██║██████╔╝    │
+# │    ██║  ██║██║   ██║██║        ██║   ██║   ██║██╔══██╗    │
+# │    ██████╔╝╚██████╔╝╚██████╗   ██║   ╚██████╔╝██║  ██║    │
+# │    ╚═════╝  ╚═════╝  ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝    │
+# │                                                           │
+# └───────────────────────────────────────────────────────────┘
+# wslutil-doctor - Diagnose the health of wslutil's environment
+
+# Colors and symbols
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+RESET='\033[0m'
+CHECK="${GREEN}✓${RESET}"
+CROSS="${RED}✗${RESET}"
+
+# Command checks
+REQUIRED_COMMANDS=("wl-copy" "wl-paste" "wayland-info" "crudini")
+declare -A PACKAGE_MAP=(
+    [wl - copy]="wl-clipboard"
+    [wl - paste]="wl-clipboard"
+    [wayland - info]="wayland-info"
+    [crudini]="crudini"
+)
+
+# File checks
+REQUIRED_FILES=(
+    "/etc/wsl.conf"
+)
+
+printf "\nwslutil doctor\n\n"
+
+### Environment Checks
+printf "== Environment ==\n"
+WSL_OK=false
+WSLUTIL_OK=false
+
+# Check for WSL environment
+printf "["
+if grep -qi microsoft /proc/version 2>/dev/null; then
+    printf "$CHECK"
+    WSL_OK=true
+else
+    printf "$CROSS"
+fi
+printf "] %-22s %s\n" "WSL environment" "$($WSL_OK && echo "OK" || echo "not detected")"
+
+# Check if wslutil is in PATH
+printf "["
+if command -v wslutil >/dev/null 2>&1; then
+    printf "$CHECK"
+    WSLUTIL_OK=true
+else
+    printf "$CROSS"
+fi
+printf "] %-22s %s\n" "wslutil in PATH" "$($WSLUTIL_OK && echo "found" || echo "not found")"
+
+printf "\n"
+
+###  Required Commands
+printf "== Required Commands ==\n"
+MISSING_COMMANDS=0
+declare -A MISSING_PACKAGES
+for cmd in "${REQUIRED_COMMANDS[@]}"; do
+    printf "["
+    if command -v "$cmd" >/dev/null 2>&1; then
+        printf "$CHECK"
+        status="found"
+    else
+        printf "$CROSS"
+        status="missing"
+        ((MISSING_COMMANDS++))
+        MISSING_PACKAGES["$cmd"]="${PACKAGE_MAP[$cmd]}"
+    fi
+    printf "] %-22s %s\n" "$cmd" "$status"
+done
+printf "\n"
+
+###  File Presence Checks
+printf "== Required Files ==\n"
+MISSING_FILES=0
+for file in "${REQUIRED_FILES[@]}"; do
+    printf "["
+    if [ -e "$file" ]; then
+        printf "$CHECK"
+        status="present"
+    else
+        printf "$CROSS"
+        status="missing"
+        ((MISSING_FILES++))
+    fi
+    printf "] %-22s %s\n" "$file" "$status"
+done
+printf "\n"
+
+###  File Content Checks (Warnings Only)
+printf "== File Content Checks ==\n"
+WARNINGS=0
+FILE_CONTENT_PASSED=0
+
+if [ -e "/etc/wsl.conf" ]; then
+    if command -v crudini >/dev/null 2>&1; then
+        for section in boot user; do
+            printf "["
+            if crudini --get /etc/wsl.conf "$section" &>/dev/null; then
+                printf "$CHECK"
+                status="found"
+                ((FILE_CONTENT_PASSED++))
+            else
+                printf "$CROSS"
+                status="missing (warn)"
+                ((WARNINGS++))
+            fi
+            printf "] [wsl.conf] %-14s %s\n" "section [$section]" "$status"
+        done
+    else
+        printf "[${CROSS}] crudini not found — cannot check file contents\n"
+        ((WARNINGS++))
+    fi
+else
+    printf "[${CROSS}] /etc/wsl.conf not found — skipping content checks\n"
+fi
+
+printf "\n"
+
+###  Summary
+TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
+
+if [ "$TOTAL_MISSING" -eq 0 ] && [ "$WARNINGS" -eq 0 ] && $WSL_OK && $WSLUTIL_OK; then
+    printf "${GREEN}All checks passed. wslutil environment looks good!${RESET}\n\n"
+else
+    [ "$TOTAL_MISSING" -gt 0 ] && printf "${RED}%d issue(s) detected.${RESET}\n" "$TOTAL_MISSING"
+    [ "$WARNINGS" -gt 0 ] && printf "${RED}%d warning(s) issued.${RESET}\n" "$WARNINGS"
+
+    if [ "$MISSING_COMMANDS" -gt 0 ]; then
+        printf "\nMissing commands and install suggestions:\n"
+        for cmd in "${!MISSING_PACKAGES[@]}"; do
+            pkg="${MISSING_PACKAGES[$cmd]}"
+            printf "  → To install %-12s: sudo apt install %s\n" "$cmd" "$pkg"
+        done
+    fi
+    if ! $WSLUTIL_OK; then
+        printf "\n${RED}Tip:${RESET} 'wslutil' is not in your PATH. Make sure it's installed and added to ~/.local/bin or another directory in your PATH.\n"
+    fi
+    if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
+        printf "\n${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
+        printf "  ${GREEN}sudo wslutil init${RESET}\n"
+    fi
+    printf "\n"
+fi

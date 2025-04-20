@@ -1,0 +1,31 @@
+winexe:
+    # Windows Built In
+    # - These are the default windows commands that I want to be able to run from WSL
+    # - Beware though that file arguments may not work as expected unless you use the windows path
+    - explorer.exe
+    - msedgea.exe
+    - cmd.exe
+    - powerShell.exe # Used a slightly different name to avoid handling in git-browse
+    - SUDO.exe
+    - ipconfig.exe
+    - netsh.exe
+    - reg.exe
+    - regedit.exe
+    - notepad.exe
+    - systeminfo.exe
+    - taskkill.exe
+    - tasklist.exe
+    - taskmgr.exe
+    # Windows Extras
+    # - Generally for gui apps just utilize win-open <file> to open the file in the default app
+    # - Dont put applications like Word/Excel/Acrobat in here unless you dont want to use the default app
+    - curl.exe # Sometimes used to test network connectivity & proxy
+    - winget.exe # Doesnt work right due to needing elevated permissions for changes
+    - wt.exe
+    - wsl.exe
+    - gsudo.exe # gsudo is a sudo replacement for windows that theoretically works with wsl
+    - powertoys.awake.exe
+    - notepad++.exe
+    - brave.exe
+    - librewolf.exe
+    - firefox.exe
