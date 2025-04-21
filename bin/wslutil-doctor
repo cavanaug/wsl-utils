@@ -66,7 +66,7 @@ for cmd in "${REQUIRED_COMMANDS[@]}"; do
         ((MISSING_COMMANDS++))
         MISSING_PACKAGES["$cmd"]="${PACKAGE_MAP[$cmd]}"
     fi
-    printf "] %-22s %s\n" "$cmd" "$status"
+    printf "] %s\n" "$cmd"
 done
 printf "\n"
 
@@ -85,7 +85,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 else
     printf "$CROSS"
 fi
-printf "] %-22s %s\n" "WSL environment" "$($WSL_OK && echo "OK" || echo "not detected")"
+printf "] %s\n" "WSL environment"
 
 # Check if wslutil is in PATH
 printf "["
@@ -95,7 +95,7 @@ if command -v wslutil >/dev/null 2>&1; then
 else
     printf "$CROSS"
 fi
-printf "] %-22s %s\n" "wslutil in PATH" "$($WSLUTIL_OK && echo "found" || echo "not found")"
+printf "] %s\n" "wslutil in PATH"
 
 # Check for WIN_USERPROFILE
 printf "["
@@ -105,7 +105,7 @@ if [ -n "$WIN_USERPROFILE" ]; then
 else
     printf "$CROSS"
 fi
-printf "] %-22s %s\n" "WIN_USERPROFILE set" "$($WIN_USERPROFILE_OK && echo "yes" || echo "no")"
+printf "] %s\n" "WIN_USERPROFILE set"
 
 # Check for WIN_WINDIR
 printf "["
@@ -115,7 +115,7 @@ if [ -n "$WIN_WINDIR" ]; then
 else
     printf "$CROSS"
 fi
-printf "] %-22s %s\n" "WIN_WINDIR set" "$($WIN_WINDIR_OK && echo "yes" || echo "no")"
+printf "] %s\n" "WIN_WINDIR set"
 printf "\n"
 
 ###  File Presence Checks
@@ -131,7 +131,7 @@ for file in "${REQUIRED_FILES[@]}"; do
         status="missing"
         ((MISSING_FILES++))
     fi
-    printf "] %-22s %s\n" "$file" "$status"
+    printf "] %s\n" "$file"
 done
 printf "\n"
 
@@ -153,7 +153,7 @@ if [ -e "/etc/wsl.conf" ]; then
                 status="missing (warn)"
                 ((WARNINGS++))
             fi
-            printf "] [wsl.conf] %-14s %s\n" "section [$section]" "$status"
+            printf "] [wsl.conf] %s\n" "section [$section]"
         done
     else
         printf "[${CROSS}] crudini not found — cannot check file contents\n"
