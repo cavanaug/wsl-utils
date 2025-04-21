@@ -38,6 +38,38 @@ REQUIRED_FILES=(
 
 printf "\nwslutil doctor\n\n"
 
+###  Required Commands
+printf "== Required Commands ==\n"
+MISSING_COMMANDS=0
+declare -A MISSING_PACKAGES
+for cmd in "${REQUIRED_COMMANDS[@]}"; do
+    printf "["
+    found=false
+    if [ "$cmd" == "update-binfmts" ]; then
+        # Special check for update-binfmts in /usr/sbin
+        if [ -x "/usr/sbin/update-binfmts" ]; then
+            found=true
+        fi
+    else
+        # Standard check for other commands
+        if command -v "$cmd" >/dev/null 2>&1; then
+            found=true
+        fi
+    fi
+
+    if $found; then
+        printf "$CHECK"
+        status="found"
+    else
+        printf "$CROSS"
+        status="missing"
+        ((MISSING_COMMANDS++))
+        MISSING_PACKAGES["$cmd"]="${PACKAGE_MAP[$cmd]}"
+    fi
+    printf "] %-22s %s\n" "$cmd" "$status"
+done
+printf "\n"
+
 ### Environment Checks
 printf "== Environment ==\n"
 WSL_OK=false
@@ -84,40 +116,6 @@ else
     printf "$CROSS"
 fi
 printf "] %-22s %s\n" "WIN_WINDIR set" "$($WIN_WINDIR_OK && echo "yes" || echo "no")"
-
-printf "\n"
-
-###  Required Commands
-printf "== Required Commands ==\n"
-MISSING_COMMANDS=0
-declare -A MISSING_PACKAGES
-for cmd in "${REQUIRED_COMMANDS[@]}"; do
-    printf "["
-    found=false
-    if [ "$cmd" == "update-binfmts" ]; then
-        # Special check for update-binfmts in /usr/sbin
-        if [ -x "/usr/sbin/update-binfmts" ]; then
-            found=true
-        fi
-    else
-        # Standard check for other commands
-        if command -v "$cmd" >/dev/null 2>&1; then
-            found=true
-        fi
-    fi
-
-    if $found; then
-        printf "$CHECK"
-        status="found"
-    else
-        printf "$CROSS"
-        status="missing"
-        ((MISSING_COMMANDS++))
-        MISSING_PACKAGES["$cmd"]="${PACKAGE_MAP[$cmd]}"
-    fi
-    printf "] %-22s %s\n" "$cmd" "$status"
-done
-printf "\n"
 
 ###  File Presence Checks
 printf "== Required Files ==\n"
