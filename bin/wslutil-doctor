@@ -40,6 +40,8 @@ printf "\nwslutil doctor\n\n"
 printf "== Environment ==\n"
 WSL_OK=false
 WSLUTIL_OK=false
+WIN_USERPROFILE_OK=false
+WIN_WINDIR_OK=false
 
 # Check for WSL environment
 printf "["
@@ -60,6 +62,26 @@ else
     printf "$CROSS"
 fi
 printf "] %-22s %s\n" "wslutil in PATH" "$($WSLUTIL_OK && echo "found" || echo "not found")"
+
+# Check for WIN_USERPROFILE
+printf "["
+if [ -n "$WIN_USERPROFILE" ]; then
+    printf "$CHECK"
+    WIN_USERPROFILE_OK=true
+else
+    printf "$CROSS"
+fi
+printf "] %-22s %s\n" "WIN_USERPROFILE set" "$($WIN_USERPROFILE_OK && echo "yes" || echo "no")"
+
+# Check for WIN_WINDIR
+printf "["
+if [ -n "$WIN_WINDIR" ]; then
+    printf "$CHECK"
+    WIN_WINDIR_OK=true
+else
+    printf "$CROSS"
+fi
+printf "] %-22s %s\n" "WIN_WINDIR set" "$($WIN_WINDIR_OK && echo "yes" || echo "no")"
 
 printf "\n"
 
@@ -131,8 +153,9 @@ printf "\n"
 
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
+ENV_OK=$($WSL_OK && $WSLUTIL_OK && $WIN_USERPROFILE_OK && $WIN_WINDIR_OK && echo true || echo false)
 
-if [ "$TOTAL_MISSING" -eq 0 ] && [ "$WARNINGS" -eq 0 ] && $WSL_OK && $WSLUTIL_OK; then
+if [ "$TOTAL_MISSING" -eq 0 ] && [ "$WARNINGS" -eq 0 ] && $ENV_OK; then
     printf "${GREEN}All checks passed. wslutil environment looks good!${RESET}\n\n"
 else
     [ "$TOTAL_MISSING" -gt 0 ] && printf "${RED}%d issue(s) detected.${RESET}\n" "$TOTAL_MISSING"
@@ -147,6 +170,11 @@ else
     fi
     if ! $WSLUTIL_OK; then
         printf "\n${RED}Tip:${RESET} 'wslutil' is not in your PATH. Make sure it's installed and added to ~/.local/bin or another directory in your PATH.\n"
+    fi
+    if ! $WIN_USERPROFILE_OK || ! $WIN_WINDIR_OK; then
+        printf "\n${RED}Tip:${RESET} Windows environment variables (WIN_USERPROFILE, WIN_WINDIR) missing. Run:\n"
+        printf "  ${GREEN}eval \"\$(wslutil shellenv)\"${RESET}\n"
+        printf "  and add it to your shell's startup file (e.g., ~/.bashrc, ~/.zshrc).\n"
     fi
     if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
         printf "\n${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
