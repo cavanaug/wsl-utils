@@ -21,12 +21,13 @@ CHECK="${GREEN}✓${RESET}"
 CROSS="${RED}✗${RESET}"
 
 # Command checks
-REQUIRED_COMMANDS=("wl-copy" "wl-paste" "wayland-info" "crudini")
+REQUIRED_COMMANDS=("wl-copy" "wl-paste" "wayland-info" "crudini" "update-binfmts")
 declare -A PACKAGE_MAP=(
     [wl - copy]="wl-clipboard"
     [wl - paste]="wl-clipboard"
     [wayland - info]="wayland-info"
     [crudini]="crudini"
+    [update - binfmts]="binfmt-support"
 )
 
 # File checks
