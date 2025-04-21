@@ -116,6 +116,7 @@ else
     printf "$CROSS"
 fi
 printf "] %-22s %s\n" "WIN_WINDIR set" "$($WIN_WINDIR_OK && echo "yes" || echo "no")"
+printf "\n"
 
 ###  File Presence Checks
 printf "== Required Files ==\n"
