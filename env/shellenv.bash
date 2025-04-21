@@ -1,4 +1,4 @@
-declare -x WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+declare -g -x WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 if [[ ! -d $WIN_WINDIR ]]; then
     echo "ERROR: WIN_WINDIR is not configured and unable to find WINDOWS"
     exit 1
