@@ -92,7 +92,20 @@ MISSING_COMMANDS=0
 declare -A MISSING_PACKAGES
 for cmd in "${REQUIRED_COMMANDS[@]}"; do
     printf "["
-    if command -v "$cmd" >/dev/null 2>&1; then
+    found=false
+    if [ "$cmd" == "update-binfmts" ]; then
+        # Special check for update-binfmts in /usr/sbin
+        if [ -x "/usr/sbin/update-binfmts" ]; then
+            found=true
+        fi
+    else
+        # Standard check for other commands
+        if command -v "$cmd" >/dev/null 2>&1; then
+            found=true
+        fi
+    fi
+
+    if $found; then
         printf "$CHECK"
         status="found"
     else
