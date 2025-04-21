@@ -108,8 +108,8 @@ upgrade)
     echo "  doctor     Run a health check on the wslutil environment"
     echo "  shellenv   Setup the shell environment (eval the output)"
     echo "  shim       Create/Update windows command shims in the wsutil bin directory"
-    echo "  setup      Setup & Install wslutil system environment (utilizes sudo)"
-    echo "  upgrade    Upgrade the WSL utility in place"
+    echo "  setup      Setup & Configure system environment for wslutil (utilizes sudo)"
+    echo "  upgrade    Upgrade the wslutil in place"
     if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|shellenv|shim|setup|upgrade)')"; then
         printf "\nExtra Subcommands:\n"
         for i in $extras; do
