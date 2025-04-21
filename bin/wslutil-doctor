@@ -136,12 +136,13 @@ done
 printf "\n"
 
 ###  File Content Checks (Warnings Only)
-printf "== File Content Checks ==\n"
 WARNINGS=0
 FILE_CONTENT_PASSED=0
 
-if [ -e "/etc/wsl.conf" ]; then
-    if command -v crudini >/dev/null 2>&1; then
+# Only run content checks if crudini is available
+if command -v crudini >/dev/null 2>&1; then
+    printf "== File Content Checks ==\n"
+    if [ -e "/etc/wsl.conf" ]; then
         for section in boot user; do
             printf "["
             if crudini --get /etc/wsl.conf "$section" &>/dev/null; then
@@ -156,14 +157,12 @@ if [ -e "/etc/wsl.conf" ]; then
             printf "] [wsl.conf] %s\n" "section [$section]"
         done
     else
-        printf "[${CROSS}] crudini not found — cannot check file contents\n"
-        ((WARNINGS++))
+        printf "[${CROSS}] /etc/wsl.conf not found — skipping content checks\n"
+        # No need to increment WARNINGS here, as missing file is already an error
     fi
-else
-    printf "[${CROSS}] /etc/wsl.conf not found — skipping content checks\n"
+    printf "\n"
 fi
-
-printf "\n"
+# End of crudini check block
 
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
