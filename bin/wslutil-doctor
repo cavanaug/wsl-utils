@@ -33,6 +33,7 @@ declare -A PACKAGE_MAP=(
 # File checks
 REQUIRED_FILES=(
     "/etc/wsl.conf"
+    "/usr/lib/binfmt.d/WSLInterop.conf"
 )
 
 printf "\nwslutil doctor\n\n"
