@@ -47,6 +47,7 @@ while IFS= read -r line; do
 done < "${WIN_ENV_FILE}"
 
 declare -g -x WIN_APPDATA="${WIN_ENV[APPDATA]}"
+declare -g -x WIN_LOCALAPPDATA="${WIN_ENV[LOCALAPPDATA]}"
 declare -g -x WIN_COMPUTERNAME="${WIN_ENV[COMPUTERNAME]}"
 declare -g -x WIN_USERNAME="${WIN_ENV[USERNAME]}"
 declare -g -x WIN_USERDOMAIN="${WIN_ENV[USERDOMAIN]}"

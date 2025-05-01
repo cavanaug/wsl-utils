@@ -1,0 +1,63 @@
+#!/bin/bash
+#  ┌────────────────────────────────────────────────────────────────┐
+#  │                                                                │
+#  │    ██╗    ██╗██╗███╗   ██╗      ██████╗ ██╗   ██╗███╗   ██╗    │
+#  │    ██║    ██║██║████╗  ██║      ██╔══██╗██║   ██║████╗  ██║    │
+#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██████╔╝██║   ██║██╔██╗ ██║    │
+#  │    ██║███╗██║██║██║╚██╗██║╚════╝██╔══██╗██║   ██║██║╚██╗██║    │
+#  │    ╚███╔███╔╝██║██║ ╚████║      ██║  ██║╚██████╔╝██║ ╚████║    │
+#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝      ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝    │
+#  │                                                                │
+#  └────────────────────────────────────────────────────────────────┘
+#  - This script is used to run windows programs via Windows PowerShell from WSL.
+#  - It takes an executable name and arguments as input.
+#    - Any argument that is a file or directory will be converted to a windows path
+#  - If the command is part of a pipe (!isatty) it will attempt to coerce output to utf-8 with unix line endings
+#  - It will run the command in powershell attempting to find it using the windows PATH
+#    - Utilize winutil alias to create alias mappings that have a full path for items not in PATH
+#
+WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
+
+# Define path to the custom wslpath wrapper
+
+CMDARGS=()
+
+if [[ -L "$0" ]]; then
+    # Invoked via symlink
+    SYM="SYM-"
+    CMD=$(basename "$0")
+    # Arguments are all passed arguments
+    ARGS_TO_PROCESS=("$@")
+else
+    # Invoked directly
+    SYM=""
+    CMD=$1
+    shift
+    # Arguments are the remaining ones
+    ARGS_TO_PROCESS=("$@")
+fi
+
+# Process arguments for path conversion
+for i in "${ARGS_TO_PROCESS[@]}"; do
+    if [[ -f $i || -d $i ]]; then
+        # Anything that is a file or directory will be converted to a windows path, potentially with a substituted drive letter
+        # Use the -W flag to invoke the substitution logic in our wrapper
+        CMDARGS+=("$(wslpath -w "${i}")")
+    else
+        CMDARGS+=("${i}")
+    fi
+done
+if [[ -t 1 ]]; then
+    # If we are not in a pipe, just run the command
+    #echo $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
+    $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
+else
+    # If we are in a pipe, be sure to run the command thru dos2unix to change line endings
+    # and will convert the output to utf-8
+    #echo $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"'| dos2unix '
+    $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}" | dos2unix
+fi
+
+mkdir -p ${HOME}/.local/state/wslutil
+echo "win-run ${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log

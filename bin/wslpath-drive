@@ -1,0 +1,104 @@
+#!/bin/bash
+# Contains the wslpath_drive function to convert WSL paths to Windows paths,
+# potentially substituting drive letters based on 'subst.exe' output.
+
+# Define necessary Windows paths, allowing override from environment
+WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+SUBST_EXE="${WIN_WINDIR}/System32/subst.exe"
+
+# Function to convert WSL path to Windows path using subst.exe drive mappings
+# Accepts an optional second argument for slash type: "forward" or "backward" (default)
+wslpath_subst() {
+    local linux_path="$1"
+    local slash_type="${2:-backward}" # Default to backward slashes
+    local win_path
+    local subst_output
+    local drive_letter
+    local drive_path
+
+    # Convert Linux path to Windows path using the standard wslpath first
+    win_path=$(/usr/bin/wslpath -w "$linux_path")
+    if [[ $? -ne 0 ]]; then
+        # If standard wslpath fails, return the error
+        return 1
+    fi
+
+    # Get substituted drive mappings by calling subst.exe directly
+    # Ignore stderr from subst.exe as it might print "Invalid parameter" if no drives are substituted
+    raw_subst_output=$("$SUBST_EXE" 2>/dev/null)
+
+    # If subst output is empty, return the original wslpath result
+    if [[ -z "$raw_subst_output" ]]; then
+        echo "$win_path"
+        return 0
+    fi
+
+    # Convert line endings
+    subst_output=$(echo "$raw_subst_output" | dos2unix)
+
+    # Sort subst output by path length (longest first) to handle nested paths correctly
+    sorted_subst_output=$(echo "$subst_output" | awk -F ' => ' '{ print length($2), $0 }' | sort -t' ' -k1,1nr | cut -d' ' -f2-)
+
+    # Process sorted subst output line by line
+    while IFS= read -r line; do
+        # Extract drive letter and path (e.g., "H:\: => UNC\wsl.localhost\...")
+        if [[ "$line" =~ ^([A-Z]):\\:[[:space:]]+=\>[[:space:]]+(.*)$ ]]; then
+            drive_letter="${BASH_REMATCH[1]}"
+            drive_path_raw="${BASH_REMATCH[2]}" # Raw path from subst, might start with UNC\
+
+            # Replace UNC\ prefix with \\ for comparison with wslpath output
+            drive_path_compare="${drive_path_raw/#UNC\\/\\\\}"
+
+            # Check if the win_path starts with the substituted drive_path (case-insensitive)
+            # Normalize paths by converting to lower case and removing potential trailing backslashes
+            win_path_lower=$(echo "${win_path%\\}" | tr '[:upper:]' '[:lower:]')
+            drive_path_compare_lower=$(echo "${drive_path_compare%\\}" | tr '[:upper:]' '[:lower:]')
+
+            # Use simple string prefix matching
+            if [[ "$win_path_lower" == "$drive_path_compare_lower"* ]]; then
+                # Calculate the part of the win_path that comes after the matched prefix
+                suffix="${win_path:${#drive_path_compare}}"
+                # Construct the new path with the drive letter
+                win_path="${drive_letter}:${suffix}"
+                # Ensure the path starts with X:\ if there's a suffix, otherwise just X:
+                if [[ -n "$suffix" && ! "$suffix" =~ ^\\ ]]; then
+                    win_path="${drive_letter}:\\${suffix}"
+                elif [[ -z "$suffix" ]]; then
+                    win_path="${drive_letter}:\\" # Append backslash for root drive path
+                fi
+                break # Found a match, no need to check further
+            fi
+        fi
+    done <<<"$sorted_subst_output"
+
+    # Convert slashes if requested
+    if [[ "$slash_type" == "forward" ]]; then
+        win_path=$(echo "$win_path" | tr '\\' '/')
+    fi
+
+    # Echo the potentially modified path
+    echo "$win_path"
+}
+
+# Main script logic
+if [[ "$1" == "-W" || "$1" == "-M" ]]; then
+    flag="$1" # Removed 'local' keyword
+    shift     # Remove -W or -M from arguments
+    if [[ $# -ne 1 ]]; then
+        echo "Usage: $0 $flag <linux_path>" >&2
+        exit 1
+    fi
+
+    if [[ "$flag" == "-W" ]]; then
+        # Handle the -W flag for subst mapping (backward slashes)
+        wslpath_subst "$1" "backward"
+    else # -M flag
+        # Handle the -M flag for subst mapping (forward slashes)
+        wslpath_subst "$1" "forward"
+    fi
+    exit $? # Exit with the status of wslpath_subst
+else
+    # Default behavior: pass all arguments to the original wslpath
+    /usr/bin/wslpath "$@"
+    exit $? # Exit with the status of the original wslpath
+fi
