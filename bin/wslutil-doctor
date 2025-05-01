@@ -20,16 +20,17 @@ RESET='\033[0m'
 CHECK="${GREEN}✓${RESET}"
 CROSS="${RED}✗${RESET}"
 
-# Command checks
-REQUIRED_COMMANDS=("wl-copy" "wl-paste" "wayland-info" "crudini" "update-binfmts" "dos2unix" "dconf")
-declare -A PACKAGE_MAP=(
-    [wl - copy]="wl-clipboard"
-    [wl - paste]="wl-clipboard"
-    [wayland - info]="wayland-info"
-    [crudini]="crudini"
-    [dos2unix]="dos2unix"
-    [update - binfmts]="binfmt-support"
+# Command checks (full paths)
+REQUIRED_COMMANDS=(
+    "/usr/bin/wl-copy"
+    "/usr/bin/wl-paste"
+    "/usr/bin/wayland-info"
+    "/usr/bin/crudini"
+    "/usr/sbin/update-binfmts"
+    "/usr/bin/dos2unix"
+    "/usr/bin/dconf"
 )
+# We will use dpkg -S later, so PACKAGE_MAP is no longer needed.
 
 # File checks
 REQUIRED_FILES=(
@@ -42,32 +43,19 @@ printf "\nwslutil doctor\n\n"
 ###  Required Commands
 printf "== Required Commands ==\n"
 MISSING_COMMANDS=0
-declare -A MISSING_PACKAGES
-for cmd in "${REQUIRED_COMMANDS[@]}"; do
+declare -A MISSING_COMMAND_PATHS # Store missing paths for later dpkg lookup
+for cmd_path in "${REQUIRED_COMMANDS[@]}"; do
     printf "["
-    found=false
-    if [ "$cmd" == "update-binfmts" ]; then
-        # Special check for update-binfmts in /usr/sbin
-        if [ -x "/usr/sbin/update-binfmts" ]; then
-            found=true
-        fi
-    else
-        # Standard check for other commands
-        if command -v "$cmd" >/dev/null 2>&1; then
-            found=true
-        fi
-    fi
-
-    if $found; then
+    if [ -x "$cmd_path" ]; then
         printf "$CHECK"
         status="found"
     else
         printf "$CROSS"
         status="missing"
         ((MISSING_COMMANDS++))
-        MISSING_PACKAGES["$cmd"]="${PACKAGE_MAP[$cmd]}"
+        MISSING_COMMAND_PATHS["$cmd_path"]=1 # Mark path as missing
     fi
-    printf "] %s\n" "$cmd"
+    printf "] %s\n" "$cmd_path"
 done
 printf "\n"
 
@@ -165,6 +153,55 @@ if command -v crudini >/dev/null 2>&1; then
 fi
 # End of crudini check block
 
+
+# Helper function to get installation suggestion based on package manager
+get_install_suggestion() {
+    local cmd_path="$1"
+    local pkg_manager=""
+    local install_cmd=""
+    local pkg_name=""
+
+    # Detect package manager
+    if command -v dpkg &>/dev/null; then
+        pkg_manager="dpkg"
+        install_cmd="sudo apt install"
+    elif command -v rpm &>/dev/null; then
+        pkg_manager="rpm"
+        # Prefer dnf if available, otherwise use yum
+        if command -v dnf &>/dev/null; then
+            install_cmd="sudo dnf install"
+        elif command -v yum &>/dev/null; then
+            install_cmd="sudo yum install"
+        else
+            install_cmd="package manager (dnf/yum)" # Fallback message
+        fi
+    fi
+
+    # Find package name based on manager
+    if [ "$pkg_manager" == "dpkg" ]; then
+        pkg_info=$(dpkg -S "$cmd_path" 2>/dev/null)
+        if [ -n "$pkg_info" ]; then
+            pkg_name=$(echo "$pkg_info" | cut -d':' -f1)
+        fi
+    elif [ "$pkg_manager" == "rpm" ]; then
+        pkg_name=$(rpm -qf "$cmd_path" 2>/dev/null)
+        # rpm -qf might return "file /path/to/file is not owned by any package"
+        if [[ "$pkg_name" == *"not owned by any package"* ]] || [ -z "$pkg_name" ]; then
+            pkg_name="" # Reset if not found or error message
+        fi
+    fi
+
+    # Output suggestion
+    if [ -n "$pkg_name" ] && [ -n "$install_cmd" ]; then
+        printf "  → For %-25s: %s %s\n" "$cmd_path" "$install_cmd" "$pkg_name"
+    elif [ -n "$pkg_manager" ]; then
+        printf "  → For %-25s: Could not determine package via %s (try searching?)\n" "$cmd_path" "$pkg_manager"
+    else
+        printf "  → For %-25s: Could not determine package (unknown package manager)\n" "$cmd_path"
+    fi
+}
+
+
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
 ENV_OK=$($WSL_OK && $WSLUTIL_OK && $WIN_USERPROFILE_OK && $WIN_WINDIR_OK && echo true || echo false)
@@ -177,9 +214,8 @@ else
 
     if [ "$MISSING_COMMANDS" -gt 0 ]; then
         printf "\nMissing commands and install suggestions:\n"
-        for cmd in "${!MISSING_PACKAGES[@]}"; do
-            pkg="${MISSING_PACKAGES[$cmd]}"
-            printf "  → To install %-12s: sudo apt install %s\n" "$cmd" "$pkg"
+        for cmd_path in "${!MISSING_COMMAND_PATHS[@]}"; do
+            get_install_suggestion "$cmd_path"
         done
     fi
     if ! $WSLUTIL_OK; then
