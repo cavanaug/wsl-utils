@@ -9,10 +9,16 @@ A collection of command-line utilities designed to simplify and enhance the inte
 ## Features
 
 * **Environment Setup:** Easily configure necessary environment variables for WSL-Windows interop.
-* **Health Checks:** Diagnose potential issues in your WSL setup with `wslutil doctor`.
-* **In-Place Upgrades:** Keep `wsl-utils` up-to-date directly from the repository.
-* **Extensible:** Add custom functionality by creating `wslutil-*` scripts.
-* **Windows Integration:** Includes helpers for interacting with Windows clipboard and opening files/URLs in the Windows default browser (via `win-*` scripts, although their integration with `wslutil` might vary).
+* **Environment Setup:** Easily configure necessary environment variables (`WIN_USERPROFILE`, `WIN_WINDIR`) for WSL-Windows interop using `wslutil shellenv`.
+* **Health Checks:** Diagnose potential issues in your WSL setup (required commands, environment variables, config files) with `wslutil doctor`.
+* **In-Place Upgrades:** Keep `wsl-utils` up-to-date directly from its git repository using `wslutil upgrade`.
+* **Extensible:** Add custom functionality by creating executable `wslutil-<name>` scripts in your PATH.
+* **Windows Integration Helpers:**
+    * `win-browser`: Open files, directories, or URLs in the default Windows browser.
+    * `win-copy`: Copy standard input to the Windows clipboard (primarily a fallback for non-WSLg environments).
+    * `win-open`: Open files or directories using the default Windows application (like double-clicking).
+    * `win-paste`: Paste from the Windows clipboard to standard output, correctly handling line endings.
+    * `win-run`: Execute Windows commands from WSL, automatically converting file/directory path arguments.
 
 ## Installation
 
@@ -73,14 +79,7 @@ Acts as the entry point and dispatcher for all other subcommands. Also handles d
 
 ### `wslutil doctor`
 
-Performs a health check on your WSL environment specifically for `wsl-utils`. It verifies:
-
-* Presence of required command-line tools (e.g., `wl-copy`, `wl-paste`, `crudini`).
-* Correct WSL environment detection.
-* Availability of `wslutil` in the PATH.
-* Presence of essential environment variables (`WIN_USERPROFILE`, `WIN_WINDIR`).
-* Existence of required configuration files (`/etc/wsl.conf`, `/usr/lib/binfmt.d/WSLInterop.conf`).
-* Basic structure of `/etc/wsl.conf` (checks for `[boot]` and `[user]` sections if `crudini` is installed).
+Performs a sanity check on your WSL environment specifically for `wslutil`. Run this command if you suspect something isn't working correctly with `wslutil` or its helper scripts. It checks for common configuration issues, missing dependencies, and incorrect environment variable settings, providing suggestions for fixes if problems are detected.
 
 **Example:**
 
@@ -92,7 +91,7 @@ The output will show checks (`✓`) and crosses (`✗`) indicating the status of
 
 ### `wslutil shellenv`
 
-Generates shell commands to export necessary environment variables used by `wsl-utils` and potentially other WSL integration tools. This typically includes `WSLUTIL_DIR`, `WIN_USERPROFILE`, and `WIN_WINDIR`.
+Generates shell commands to export necessary environment variables used by `wslutil` and potentially other WSL integration tools. It reads the appropriate `env/shellenv.<shell>` file based on your current shell (`$SHELL`). This typically includes exporting `WSLUTIL_DIR`, `WIN_USERPROFILE`, and `WIN_WINDIR`.
 
 **Usage:**
 It's intended to be used with `eval` in your shell startup script (e.g., `~/.bashrc`):
@@ -103,7 +102,7 @@ eval "$(wslutil shellenv)"
 
 ### `wslutil upgrade`
 
-Updates the `wsl-utils` installation by pulling the latest changes from its git repository.
+Updates the `wsl-utils` installation by running `git pull` within the repository directory (`$WSLUTIL_DIR`).
 
 **Usage:**
 
@@ -115,18 +114,80 @@ wslutil upgrade
 
 * `--fetch`: Fetches updates from the remote repository but does not apply them.
 
-### `wslutil register` (Placeholder)
+### `wslutil register`
 
-Currently, this subcommand prints a message indicating registration. Its full functionality might be defined in the future.
+Currently, this subcommand prints a message indicating registration and accepts a `--name` argument, but does not perform any other actions. Its full functionality might be defined in the future.
 
-### Other Subcommands (from help output)
+### Other Subcommands (Placeholders)
 
-* `shim`: Intended to create/update Windows command shims (implementation details may vary).
-* `setup`: Intended for setting up and configuring the system environment, potentially requiring `sudo` (implementation details may vary).
+The `wslutil --help` output may list other potential subcommands like `shim` and `setup`. These are currently placeholders discovered by the help system and do not have corresponding `wslutil-*` scripts in the base installation.
 
 ### Custom Subcommands
 
 Any executable script named `wslutil-<name>` found in your PATH can be run as `wslutil <name>`.
+
+## Helper Scripts (`win-*`)
+
+These scripts are located in the `bin/` directory and provide direct integration with Windows features. They are often used standalone or can be symlinked for compatibility with other tools (e.g., symlinking `wl-paste` to `win-paste`).
+
+### `win-browser [url|file|directory]`
+
+Opens the given arguments (URLs, file paths, directory paths) in the default Windows web browser. File and directory paths are automatically converted to the appropriate Windows format (`file:...`).
+
+**Example:**
+```bash
+win-browser https://www.google.com
+win-browser ./my-project/index.html
+```
+
+### `win-copy`
+
+Reads from standard input and copies it to the Windows clipboard.
+This script primarily serves as a fallback for systems without WSLg (where `/usr/bin/wl-copy` is preferred). It uses `clip.exe` if `wl-copy` is unavailable or WSLg is not enabled.
+
+**Example:**
+```bash
+echo "Hello Windows Clipboard" | win-copy
+cat somefile.txt | win-copy
+```
+
+### `win-open [file|directory]`
+
+Opens the specified file(s) or director(y/ies) using the default Windows application associated with the file type, or Windows Explorer for directories. Paths are converted to Windows format.
+
+**Example:**
+```bash
+win-open document.docx
+win-open /mnt/c/Users/Me/Pictures
+win-open ./project/
+```
+
+### `win-paste`
+
+Prints the contents of the Windows clipboard to standard output.
+This script is useful even with WSLg, as it automatically strips carriage return (`\r`) characters often added when copying text from Windows applications, ensuring clean pasting into Unix environments. It uses `/usr/bin/wl-paste | dos2unix` if available, otherwise falls back to PowerShell's `Get-Clipboard`.
+
+**Example:**
+```bash
+# Paste clipboard content into a file
+win-paste > clipboard_content.txt
+
+# Use in a pipe
+win-paste | grep "error"
+```
+
+### `win-run <command> [args...]`
+
+Executes a Windows command or executable using PowerShell. Any arguments that are existing file or directory paths within WSL are automatically converted to their Windows equivalents using `wslpath -w`. If the output is piped (`|`), `dos2unix` is used to ensure Unix line endings.
+
+**Example:**
+```bash
+# Run notepad with a WSL path (converted automatically)
+win-run notepad.exe ~/notes.txt
+
+# Run a command and process its output
+win-run ipconfig.exe | grep "IPv4"
+```
 
 ## Contributing
 
