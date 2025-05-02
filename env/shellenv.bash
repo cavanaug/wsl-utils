@@ -1,11 +1,16 @@
 declare -g -x WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 if [[ ! -d $WIN_WINDIR ]]; then
-    echo "ERROR: WIN_WINDIR is not configured and unable to find WINDOWS"
+    echo "ERROR: WIN_WINDIR is not configured and unable to find WINDOWS" >&2
     exit 1
 fi
 
 if [[ ! ":$PATH:" == *":${WSLUTIL_DIR}/bin:"* ]]; then
     export PATH="${WSLUTIL_DIR}/bin:${PATH}"
+fi
+export WSL_INTEROP=${WSL_INTEROP:-/run/WSL/1_interop}
+if test -s ${WSL_INTEROP}; then
+    echo "ERROR: WSL_INTEROP is not configured" >&2
+    exit 1
 fi
 
 # TODO: Create wsl vars here based on XDG variables if set, else use the defaults.  These vars should then be used in the rest of the script and unset at the end to avoid environment pollution.
@@ -18,7 +23,7 @@ declare WIN_COMSPEC="/mnt/c/Windows/System32/cmd.exe"
 
 if [[ ! -f "${WIN_COMSPEC}" ]]; then
     WIN_ERROR="ERROR: Windows system32 cmd.exe not found at ${WIN_COMSPEC}"
-    echo "${WIN_ERROR}"
+    echo "${WIN_ERROR}" >&2
     exit 1
 fi
 
