@@ -127,10 +127,17 @@ upgrade)
     fi
 
     # Handle external commands if they exist
-    if command -v wslutil-$1 >/dev/null 2>&1; then
-        wslutil-$1 "$@"
-        exit 0
+    local_command="${WSLUTIL_DIR}/bin/wslutil-$1"
+    if [[ -x "$local_command" ]]; then
+        # Execute the command found in the wslutil bin directory
+        "$local_command" "$@"
+        exit $?
+    elif command -v "wslutil-$1" >/dev/null 2>&1; then
+        # Execute the command found in the system PATH
+        "wslutil-$1" "$@"
+        exit $?
     else
+        # Command not found in either location
         echo "Usage: $(basename $0) [options] {doctor|shellenv|shim|setup|upgrade}"
         exit 1
     fi
