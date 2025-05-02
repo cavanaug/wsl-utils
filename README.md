@@ -14,11 +14,11 @@ A collection of command-line utilities designed to simplify and enhance the inte
 * **In-Place Upgrades:** Keep `wsl-utils` up-to-date directly from its git repository using `wslutil upgrade`.
 * **Extensible:** Add custom functionality by creating executable `wslutil-<name>` scripts in your PATH.
 * **Windows Integration Helpers:**
-    * `win-browser`: Open files, directories, or URLs in the default Windows browser.
-    * `win-copy`: Copy standard input to the Windows clipboard (primarily a fallback for non-WSLg environments).
-    * `win-open`: Open files or directories using the default Windows application (like double-clicking).
-    * `win-paste`: Paste from the Windows clipboard to standard output, correctly handling line endings.
-    * `win-run`: Execute Windows commands from WSL, automatically converting file/directory path arguments.
+  * `win-browser`: Open files, directories, or URLs in the default Windows browser.
+  * `win-copy`: Copy standard input to the Windows clipboard (primarily a fallback for non-WSLg environments).
+  * `win-open`: Open files or directories using the default Windows application (like double-clicking).
+  * `win-paste`: Paste from the Windows clipboard to standard output, correctly handling line endings.
+  * `win-run`: Execute Windows commands from WSL, automatically converting file/directory path arguments.
 
 ## Installation
 
@@ -135,6 +135,7 @@ These scripts are located in the `bin/` directory and provide direct integration
 Opens the given arguments (URLs, file paths, directory paths) in the default Windows web browser. File and directory paths are automatically converted to the appropriate Windows format (`file:...`).
 
 **Example:**
+
 ```bash
 win-browser https://www.google.com
 win-browser ./my-project/index.html
@@ -146,6 +147,7 @@ Reads from standard input and copies it to the Windows clipboard.
 This script primarily serves as a fallback for systems without WSLg (where `/usr/bin/wl-copy` is preferred). It uses `clip.exe` if `wl-copy` is unavailable or WSLg is not enabled.
 
 **Example:**
+
 ```bash
 echo "Hello Windows Clipboard" | win-copy
 cat somefile.txt | win-copy
@@ -156,6 +158,7 @@ cat somefile.txt | win-copy
 Opens the specified file(s) or director(y/ies) using the default Windows application associated with the file type, or Windows Explorer for directories. Paths are converted to Windows format.
 
 **Example:**
+
 ```bash
 win-open document.docx
 win-open /mnt/c/Users/Me/Pictures
@@ -168,6 +171,7 @@ Prints the contents of the Windows clipboard to standard output.
 This script is useful even with WSLg, as it automatically strips carriage return (`\r`) characters often added when copying text from Windows applications, ensuring clean pasting into Unix environments. It uses `/usr/bin/wl-paste | dos2unix` if available, otherwise falls back to PowerShell's `Get-Clipboard`.
 
 **Example:**
+
 ```bash
 # Paste clipboard content into a file
 win-paste > clipboard_content.txt
@@ -181,6 +185,7 @@ win-paste | grep "error"
 Executes a Windows command or executable using PowerShell. Any arguments that are existing file or directory paths within WSL are automatically converted to their Windows equivalents using `wslpath -w`. If the output is piped (`|`), `dos2unix` is used to ensure Unix line endings.
 
 **Example:**
+
 ```bash
 # Run notepad with a WSL path (converted automatically)
 win-run notepad.exe ~/notes.txt
@@ -188,6 +193,11 @@ win-run notepad.exe ~/notes.txt
 # Run a command and process its output
 win-run ipconfig.exe | grep "IPv4"
 ```
+
+## Roadmap/ChangeLog
+
+See ROADMAP.md for a list of planned features and improvements.
+See CHANGELOG.md for a list of changes across releases
 
 ## Contributing
 
