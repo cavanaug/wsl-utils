@@ -69,11 +69,6 @@ upgrade_command() {
 # WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
 WSLUTIL_DIR="$(dirname $(dirname "$0"))"
 
-if [[ -z ${WSL_DISTRO_NAME+x} ]]; then
-    echo "Error: Not running within WSL"
-    exit 1
-fi
-
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
 shellenv)
@@ -101,6 +96,7 @@ upgrade)
     fi
     shift
     upgrade_command "$@"
+    exit 0 # Exit after upgrade command regardless of WSL check
     ;;
 --help)
     echo "Usage: $(basename $0) {shellenv|register|upgrade} [options]"
@@ -119,6 +115,18 @@ upgrade)
     exit 0
     ;;
 *)
+    # Check if running within WSL by inspecting the environment
+    # This check is bypassed for 'upgrade', '--help', and external commands
+    if ! uname -a | grep -i -q Microsoft; then
+        echo "Error: Not running within WSL" >&2
+        exit 1
+    fi
+    if [[ -z "$WSL_INTEROP" ]]; then
+        echo "Error: Running within WSL, but WSL_INTEROP not set which means not launced direct from wsl.exe" >&2
+        exit 1
+    fi
+
+    # Handle external commands if they exist
     if command -v wslutil-$1 >/dev/null 2>&1; then
         wslutil-$1 "$@"
         exit 0

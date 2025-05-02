@@ -26,7 +26,8 @@ fi
 # WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
 # - Any directories in these variables will be converted to WSL format
 declare -g -A -x WIN_ENV
-${WIN_COMSPEC} /c "set" 2> /dev/null | tr -d '\r' | sed -e 's/[\d128-\d255]//g' -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > $WIN_ENV_FILE
+#${WIN_COMSPEC} /c "set" 2> /dev/null | tr -d '\r' | sed -e 's/[\d128-\d255]//g' -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > $WIN_ENV_FILE
+${WIN_COMSPEC} /c "set" 2> /dev/null | dos2unix | sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > $WIN_ENV_FILE
 declare line=""
 while IFS= read -r line; do
     #echo "line=\"$line\""
