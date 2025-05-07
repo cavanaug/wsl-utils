@@ -8,8 +8,8 @@ if [[ ! ":$PATH:" == *":${WSLUTIL_DIR}/bin:"* ]]; then
     export PATH="${WSLUTIL_DIR}/bin:${PATH}"
 fi
 export WSL_INTEROP=${WSL_INTEROP:-/run/WSL/1_interop}
-if test -s ${WSL_INTEROP}; then
-    echo "ERROR: WSL_INTEROP is not configured" >&2
+if test ! -S ${WSL_INTEROP}; then
+    echo "ERROR: WSL_INTEROP is not configured properly" >&2
     exit 1
 fi
 
