@@ -1,0 +1,76 @@
+#!/bin/bash
+#
+# WSL2 bin initialization script
+# - This script will create symlinks to windows executables in the user's .wsl2/bin directory
+# - This script exists because I dont want tons of dll's and other garbage in my path when autocomplete is enabled
+#
+
+# Variables to make this complete standalone
+export WSL_WINDOWS='/mnt/c/WINDOWS'
+export WSL_WINDOWS_SYS32="${WSL_WINDOWS}/System32"
+cmd_func() { ${WSL_WINDOWS_SYS32}/cmd.exe /c $@; }
+
+#
+# Add any windows commands that are in the path that you want easily accessible here
+for i in $(
+    cat << EOF
+explorer.exe
+cmd.exe
+powershell.exe
+ipconfig.exe
+gsudo.exe
+regedit.exe
+notepad.exe
+systeminfo.exe
+curl.exe
+wsl.exe
+winget.exe
+taskkill.exe
+tasklist.exe
+wt.exe
+EOF
+); do
+    exe="$(wslpath $(cmd_func "where $i" 2> /dev/null | strings | head -1) 2> /dev/null)"
+    if [[ $? -eq 0 ]]; then
+        base=$(basename "$exe")
+        if [[ ! -L $HOME/.wsl2/bin/${base} ]]; then
+            echo "DONE: Linked $exe to $HOME/.wsl2/bin/"
+            #ln -s "$exe" $HOME/.wsl2/bin/${base%%.exe}
+            ln -s "$exe" $HOME/.wsl2/bin/${base}
+        fi
+    else
+        echo "WARN: Unable to find \"$i\" in path"
+    fi
+done
+
+#
+# Add any full path windows commands that you want easily accessible here
+#
+# Note: Some gui applications may not work as expected without disowning processes and redirecting output from stdout/stderr
+#
+for exe in "/mnt/c/Program Files/Notepad++/notepad++.exe"; do
+    if [[ -f "$exe" ]]; then
+        base=$(basename "$exe")
+        if [[ ! -L $HOME/.wsl2/bin/${base} ]]; then
+            echo "DONE: Linked $exe to $HOME/.wsl2/bin/"
+            #ln -s "$exe" $HOME/.wsl2/bin/${base%%.exe}
+            ln -s "$exe" $HOME/.wsl2/bin/${base}
+        fi
+    else
+        echo "WARN: Unable to find \"$exe\""
+    fi
+done
+
+#
+# Special case handling for shell scripts in windows
+for exe in "${WSL_PROGRAMFILES}/Microsoft VS Code/bin/code" "${WSL_HOMEPATH}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"; do
+    if [[ -f "$exe" ]]; then
+        base=$(basename "$exe")
+        if [[ ! -L $HOME/.wsl2/bin/${base} ]]; then
+            echo "DONE: Linked $exe to $HOME/.wsl2/bin/"
+            ln -s "$exe" $HOME/.wsl2/bin/${base}
+        fi
+    else
+        echo "WARN: Unable to find \"$exe\""
+    fi
+done

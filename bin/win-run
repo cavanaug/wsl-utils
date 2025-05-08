@@ -48,16 +48,10 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
         CMDARGS+=("${i}")
     fi
 done
-if [[ -t 1 ]]; then
-    # If we are not in a pipe, just run the command
-    #echo $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
-    $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
-else
-    # If we are in a pipe, be sure to run the command thru dos2unix to change line endings
-    # and will convert the output to utf-8
-    #echo $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"'| dos2unix '
-    $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}" | dos2unix
-fi
+$POWERSHELL_EXE -Command "${CMD} ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+# $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
+#$POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 
 mkdir -p ${HOME}/.local/state/wslutil
 echo "win-run ${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+exit 0
