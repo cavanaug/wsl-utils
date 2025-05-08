@@ -1,0 +1,5 @@
+
+If wsl is not working, try to kill the wsl service and restart it.
+    wsl.exe --shutdown
+    taskkill.exe /f /im wslservice.exe
+    wsl.exe --list
