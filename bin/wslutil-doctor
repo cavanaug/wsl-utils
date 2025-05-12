@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 #
 # ┌───────────────────────────────────────────────────────────┐
 # │                       WSLUTIL                             │
@@ -20,17 +20,49 @@ RESET='\033[0m'
 CHECK="${GREEN}✓${RESET}"
 CROSS="${RED}✗${RESET}"
 
+check_init_apt() {
+    local action="$1"
+    local -n response="$2"
+    if [ -x "/usr/bin/apt-file" ]; then
+        return 0
+    fi
+    response+="# /usr/bin/apt-file required, install package apt-file\n"
+    if [ "$action" == "fix" ]; then
+        response+="sudo apt install apt-file\n"
+    fi
+    return 1
+}
+
+check_command() {
+    local action="$1" # check or fix
+    local command="$2"
+    local -n response="$3"
+    if [ -x "${command}" ]; then
+        return 0
+    fi
+    package_name=$(apt-file search "${command}" 2>/dev/null | grep -E '^[^:]+:' | cut -d':' -f1 | head -n1)
+    if [ -z "${package_name}" ]; then
+        response+="# ${command} required, but not found in package database\n"
+    else
+        response+="# ${command} required, install package ${package_name}\n"
+        if [ "${action}" == "fix" ]; then
+            response+="sudo apt install ${package_name}\n"
+        fi
+    fi
+    return 1
+}
+
 # Command checks (full paths)
 REQUIRED_COMMANDS=(
-    "/usr/bin/wl-copy"
-    "/usr/bin/wl-paste"
-    "/usr/bin/wayland-info"
     "/usr/bin/crudini"
+    "/usr/bin/wl-copy"
+    "/usr/bin/wayland-info"
     "/usr/sbin/update-binfmts"
     "/usr/bin/dos2unix"
+    "/usr/bin/iconv"
     "/usr/bin/dconf"
 )
-# We will use dpkg -S later, so PACKAGE_MAP is no longer needed.
+# We will use apt-file later, so PACKAGE_MAP is no longer needed.
 
 # File checks
 REQUIRED_FILES=(
@@ -39,6 +71,11 @@ REQUIRED_FILES=(
 )
 
 printf "\nwslutil doctor\n\n"
+
+###  Initialize
+printf "== Initialize ==\n"
+# call  check_init_apt and output similar to output below
+# exit if initalization fails but suggest to fix
 
 ###  Required Commands
 printf "== Required Commands ==\n"
@@ -153,7 +190,6 @@ if command -v crudini >/dev/null 2>&1; then
 fi
 # End of crudini check block
 
-
 # Helper function to get installation suggestion based on package manager
 get_install_suggestion() {
     local cmd_path="$1"
@@ -200,7 +236,6 @@ get_install_suggestion() {
         printf "  → For %-25s: Could not determine package (unknown package manager)\n" "$cmd_path"
     fi
 }
-
 
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
