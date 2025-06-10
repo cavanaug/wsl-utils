@@ -32,7 +32,7 @@ if [[ -L "$0" ]]; then
 else
     # Invoked directly
     SYM=""
-    CMD=$1
+    CMD="$(wslpath -w "$1")"
     shift
     # Arguments are the remaining ones
     ARGS_TO_PROCESS=("$@")
@@ -48,7 +48,7 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
         CMDARGS+=("${i}")
     fi
 done
-$POWERSHELL_EXE -Command "${CMD} ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+"$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
 # $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 #$POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 
