@@ -19,10 +19,66 @@
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 
+function ensure_utf8 {
+    # Pipe stdin directly to the python3 interpreter.
+    # The 'EOF' is quoted to prevent shell expansion within the Python code,
+    # ensuring the code is passed literally.
+    python3 -c '
+import sys
+
+# This code will be executed by the Python interpreter,
+# while its stdin is connected to the pipe from the previous command.
+
+def main():
+    # Read the ENTIRE raw byte stream from stdin.
+    # .buffer is the crucial part that provides binary-safe I/O.
+    try:
+        input_bytes = sys.stdin.buffer.read()
+    except (IOError, KeyboardInterrupt):
+        # Handle cases where the pipe might be broken or user interrupts.
+        return
+
+    # If there is no input, there is nothing to do.
+    if not input_bytes:
+        return
+
+    # Default to assuming the input is already valid.
+    output_bytes = input_bytes
+
+    # Heuristic check for UTF-16LE (with or without BOM).
+    if len(input_bytes) >= 2:
+        # Case 1: Check for the standard UTF-16LE BOM (FF FE).
+        is_bom_utf16le = input_bytes.startswith(b"\xff\xfe")
+
+        # Case 2: Check for BOM-less UTF-16LE (ASCII char followed by null).
+        is_bomless_utf16le = (input_bytes[1] == 0 and input_bytes[0] != 0)
+
+        if is_bom_utf16le or is_bomless_utf16le:
+            try:
+                # Decode the bytes from UTF-16LE into a standard Python string.
+                decoded_string = input_bytes.decode("utf-16-le")
+                # Re-encode the string into our target format: UTF-8.
+                output_bytes = decoded_string.encode("utf-8")
+            except UnicodeDecodeError:
+                # If decoding fails for some reason (e.g., malformed stream),
+                # fall back to printing the original bytes to avoid data loss.
+                pass
+
+    # Write the resulting bytes to stdout, again using the binary buffer.
+    try:
+        sys.stdout.buffer.write(output_bytes)
+        sys.stdout.buffer.flush()
+    except (IOError, KeyboardInterrupt):
+        # Handle broken pipe on output.
+        pass
+
+if __name__ == "__main__":
+    main()
+'
+}
+
 # Define path to the custom wslpath wrapper
-
 CMDARGS=()
-
 RAW_OUTPUT=false
 
 if [[ -L "$0" ]]; then
@@ -45,8 +101,8 @@ else
         shift # Remove --raw, $1 is now the command
     fi
     CMD="$(wslpath -w "$1")" # $1 is the command
-    shift # Remove the command itself
-    ARGS_TO_PROCESS=("$@") # Remaining are arguments to the command
+    shift                    # Remove the command itself
+    ARGS_TO_PROCESS=("$@")   # Remaining are arguments to the command
 fi
 
 # Process arguments for path conversion
@@ -62,7 +118,10 @@ done
 if [ "$RAW_OUTPUT" = true ]; then
     "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}"
 else
-    "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+    #"$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+    #"$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+    "$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | ensure_utf8
+    #"$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | dos2unix
 fi
 # $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 #$POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
