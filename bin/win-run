@@ -23,19 +23,30 @@ POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 
 CMDARGS=()
 
+RAW_OUTPUT=false
+
 if [[ -L "$0" ]]; then
     # Invoked via symlink
     SYM="SYM-"
     CMD=$(basename "$0")
-    # Arguments are all passed arguments
-    ARGS_TO_PROCESS=("$@")
+    ARGS_TO_PROCESS_TEMP=("$@")
+    if [[ "${ARGS_TO_PROCESS_TEMP[0]}" == "--raw" ]]; then
+        RAW_OUTPUT=true
+        # Slice the array from the second element if --raw is present
+        ARGS_TO_PROCESS=("${ARGS_TO_PROCESS_TEMP[@]:1}")
+    else
+        ARGS_TO_PROCESS=("${ARGS_TO_PROCESS_TEMP[@]}")
+    fi
 else
     # Invoked directly
     SYM=""
-    CMD="$(wslpath -w "$1")"
-    shift
-    # Arguments are the remaining ones
-    ARGS_TO_PROCESS=("$@")
+    if [[ "$1" == "--raw" ]]; then
+        RAW_OUTPUT=true
+        shift # Remove --raw, $1 is now the command
+    fi
+    CMD="$(wslpath -w "$1")" # $1 is the command
+    shift # Remove the command itself
+    ARGS_TO_PROCESS=("$@") # Remaining are arguments to the command
 fi
 
 # Process arguments for path conversion
@@ -48,10 +59,18 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
         CMDARGS+=("${i}")
     fi
 done
-"$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+if [ "$RAW_OUTPUT" = true ]; then
+    "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}"
+else
+    "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
+fi
 # $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 #$POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
 
 mkdir -p ${HOME}/.local/state/wslutil
-echo "win-run ${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+RAW_FLAG_LOG=""
+if [ "$RAW_OUTPUT" = true ]; then
+    RAW_FLAG_LOG="--raw "
+fi
+echo "win-run ${RAW_FLAG_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
 exit 0
