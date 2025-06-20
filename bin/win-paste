@@ -17,6 +17,45 @@
 #
 # Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
 #
+
+# Check for help option
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    cat <<'EOF'
+win-paste - Paste from Windows clipboard to stdout
+
+USAGE:
+    win-paste [OPTIONS]
+
+DESCRIPTION:
+    Retrieves content from the Windows clipboard and outputs it to stdout.
+    Automatically strips carriage return characters (^M) for Unix compatibility.
+
+    If WSLg is available and enabled, uses wl-paste with proper fallback.
+    Otherwise, uses PowerShell's Get-Clipboard command.
+
+OPTIONS:
+    -h, --help    Show this help message and exit
+
+    When WSLg is available, all wl-paste options are supported:
+    -n, --no-newline    Don't add newline at end of output
+    -l, --list-types    List available MIME types
+    -t, --type TYPE     Select MIME type to paste
+    -p, --primary       Use primary selection (if available)
+    -s, --seat SEAT     Use specific seat
+
+EXAMPLES:
+    win-paste > clipboard.txt       # Save clipboard to file
+    win-paste | grep "error"        # Search clipboard content
+    echo "backup: $(win-paste)"     # Include clipboard in output
+
+NOTES:
+    - Logs usage to ~/.local/state/wslutil/win-clipboard.log
+    - Automatically handles Windows line endings
+    - Can be symlinked as wl-paste for compatibility
+EOF
+    exit 0
+fi
+
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 
 # TODO: Add logging only if a debug flag is set
