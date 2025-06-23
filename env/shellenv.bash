@@ -58,6 +58,7 @@ declare -g -x WIN_COMPUTERNAME="${WIN_ENV[COMPUTERNAME]}"
 declare -g -x WIN_USERNAME="${WIN_ENV[USERNAME]}"
 declare -g -x WIN_USERDOMAIN="${WIN_ENV[USERDOMAIN]}"
 declare -g -x WIN_USERPROFILE="${WIN_ENV[USERPROFILE]}"
+declare -g -x WIN_PROGRAMFILES="${WIN_ENV[ProgramFiles]}"
 declare -g -x WIN_HOMEPATH="${WIN_ENV[HOMEDRIVE]}${WIN_ENV[HOMEPATH]}"
 
 if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then

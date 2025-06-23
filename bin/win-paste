@@ -37,7 +37,7 @@ OPTIONS:
     -h, --help    Show this help message and exit
 
     When WSLg is available, all wl-paste options are supported:
-    -n, --no-newline    Don't add newline at end of output
+    -n, --no-newline    Don't add newline at end of output (DEFAULT)
     -l, --list-types    List available MIME types
     -t, --type TYPE     Select MIME type to paste
     -p, --primary       Use primary selection (if available)

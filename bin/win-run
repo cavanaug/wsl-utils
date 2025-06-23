@@ -16,7 +16,159 @@
 #  - It will run the command in powershell attempting to find it using the windows PATH
 #    - Utilize winutil alias to create alias mappings that have a full path for items not in PATH
 #
+
+# Set up environment variables for alias resolution
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-/mnt/c/Program\ Files}
+WIN_PROGRAMFILES_X86=${WIN_PROGRAMFILES_X86:-/mnt/c/Program\ Files\ \(x86\)}
+WIN_LOCALAPPDATA=${WIN_LOCALAPPDATA:-$(wslpath "${WIN_ENV[LOCALAPPDATA]}" 2>/dev/null || echo "/mnt/c/Users/$USER/AppData/Local")}
+WIN_APPDATA=${WIN_APPDATA:-$(wslpath "${WIN_ENV[APPDATA]}" 2>/dev/null || echo "/mnt/c/Users/$USER/AppData/Roaming")}
+
+# Function to display help information
+show_help() {
+    cat <<'EOF'
+win-run - Execute Windows programs from WSL with automatic path conversion
+
+SYNOPSIS
+    win-run [OPTIONS] COMMAND [ARGS...]
+
+DESCRIPTION
+    win-run executes Windows programs via PowerShell from within WSL, providing
+    automatic path conversion and alias support for improved interoperability.
+
+    Key features:
+    • Automatic path conversion: WSL paths are converted to Windows paths
+    • UTF-8 output processing: Ensures correct text encoding from Windows programs
+    • Alias support: Define shortcuts for Windows programs not in PATH
+
+OPTIONS
+    --raw           Bypass UTF-8 output processing (useful for binary output)
+    -c FILE         Use custom config file instead of default hierarchy
+    --help          Show this help message and exit
+
+CONFIGURATION
+    Aliases are loaded from configuration files in YAML format:
+
+    Default hierarchy (global → user):
+    • ${WSLUTIL_DIR}/config/win-run.yml
+    • ~/.config/wslutil/win-run.yml
+
+    Config file format:
+        aliases:
+          alias-name:
+            path: ${WIN_PROGRAMFILES}/App/app.exe
+            options: "--flag value"
+
+EXAMPLES
+    # Run Windows command with automatic path conversion
+    win-run notepad.exe /home/user/file.txt
+
+    # Use alias from config file
+    win-run brave.exe https://example.com
+
+    # Use custom config file
+    win-run -c project-aliases.yml custom-tool.exe
+
+    # Example alias configuration: ~/.config/wslutil/win-run.yml
+    aliases:
+      brave.exe:
+        path: ${WIN_PROGRAMFILES}/BraveSoftware/Brave-Browser/Application/brave.exe
+        options: null
+      devenv.exe:
+        path: ${WIN_PROGRAMFILES}/Microsoft Visual Studio/2022/Community/Common7/IDE/devenv.exe
+        options: null
+
+PATH CONVERSION
+    Arguments that are existing files or directories are automatically converted
+    from WSL paths (e.g., /home/user/file.txt) to Windows paths
+    (e.g., \\wsl.localhost\distro\home\user\file.txt).
+
+OUTPUT PROCESSING
+    By default, win-run processes PowerShell output to ensure UTF-8 encoding
+    and Unix line endings. Use --raw to bypass this for direct unmodified output.
+
+SEE ALSO
+    wslutil(1), wslutil-doctor(1), win-open(1), win-browser(1)
+EOF
+}
+
+# Function to resolve alias for a command
+resolve_alias() {
+    local cmd="$1"
+    local config_files=()
+
+    # Use custom config if specified, otherwise use default hierarchy
+    if [[ -n "$CUSTOM_CONFIG" ]]; then
+        config_files=("$CUSTOM_CONFIG")
+    else
+        config_files=(
+            "${WSLUTIL_DIR:-$(dirname "$(dirname "$0")")}/config/win-run.yml"
+            "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/win-run.yml"
+        )
+    fi
+
+    # Check if yq is available
+    if ! command -v yq >/dev/null 2>&1; then
+        echo "$cmd" # Return original command if yq not available
+        return
+    fi
+
+    # Try to find alias in config files (user config takes precedence)
+    for config_file in "${config_files[@]}"; do
+        if [[ -f "$config_file" ]]; then
+            local alias_path
+            alias_path=$(yq eval ".aliases.\"$cmd\".path // null" "$config_file" 2>/dev/null)
+
+            if [[ "$alias_path" != "null" && -n "$alias_path" ]]; then
+                # Resolve environment variables in the path
+                alias_path=$(echo "$alias_path" | envsubst)
+                # Convert to Windows path
+                alias_path=$(wslpath -w "$alias_path" 2>/dev/null || echo "$alias_path")
+                echo "$alias_path"
+                return
+            fi
+        fi
+    done
+
+    # No alias found, return original command
+    echo "$cmd"
+}
+
+# Function to get alias options for a command
+get_alias_options() {
+    local cmd="$1"
+    local config_files=()
+
+    # Use custom config if specified, otherwise use default hierarchy
+    if [[ -n "$CUSTOM_CONFIG" ]]; then
+        config_files=("$CUSTOM_CONFIG")
+    else
+        config_files=(
+            "${WSLUTIL_DIR:-$(dirname "$(dirname "$0")")}/config/win-run.yml"
+            "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/win-run.yml"
+        )
+    fi
+
+    # Check if yq is available
+    if ! command -v yq >/dev/null 2>&1; then
+        return # Return empty if yq not available
+    fi
+
+    # Try to find alias options in config files (user config takes precedence)
+    for config_file in "${config_files[@]}"; do
+        if [[ -f "$config_file" ]]; then
+            local alias_options
+            alias_options=$(yq eval ".aliases.\"$cmd\".options // null" "$config_file" 2>/dev/null)
+
+            if [[ "$alias_options" != "null" && -n "$alias_options" ]]; then
+                # Resolve environment variables in the options
+                alias_options=$(echo "$alias_options" | envsubst)
+                echo "$alias_options"
+                return
+            fi
+        fi
+    done
+}
 POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 
 #
@@ -83,22 +235,88 @@ if __name__ == "__main__":
 
 CMDARGS=()
 RAW_OUTPUT=false
+CUSTOM_CONFIG=""
 
 if [[ -L "$0" ]]; then
     # Invoked via symlink
     SYM="SYM-"
-    CMD=$(basename "$0")
+    CMD_NAME=$(basename "$0")
+    CMD=$(resolve_alias "$CMD_NAME")
+    ALIAS_OPTIONS=$(get_alias_options "$CMD_NAME")
     ARGS_TO_PROCESS=("$@")
 else
     # Invoked directly
     SYM=""
-    if [[ "$1" == "--raw" ]]; then
-        RAW_OUTPUT=true
-        shift # Remove --raw, $1 is now the command
+
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --help)
+            show_help
+            exit 0
+            ;;
+        --raw)
+            RAW_OUTPUT=true
+            shift
+            ;;
+        -c)
+            if [[ -z "$2" ]]; then
+                echo "Error: -c option requires a config file argument" >&2
+                exit 1
+            fi
+            if [[ ! -f "$2" ]]; then
+                echo "Error: Config file '$2' does not exist" >&2
+                exit 1
+            fi
+            CUSTOM_CONFIG="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Error: Unknown option $1" >&2
+            echo "Use --help for usage information" >&2
+            exit 1
+            ;;
+        *)
+            # First non-option argument is the command
+            break
+            ;;
+        esac
+    done
+
+    if [[ $# -eq 0 ]]; then
+        echo "Error: No command specified" >&2
+        exit 1
     fi
-    CMD="$(wslpath -w "$1")" # $1 is the command
-    shift                    # Remove the command itself
-    ARGS_TO_PROCESS=("$@")   # Remaining are arguments to the command
+
+    CMD_NAME="$1"
+    # Try to resolve alias first, fallback to wslpath conversion
+    CMD=$(resolve_alias "$CMD_NAME")
+    ALIAS_OPTIONS=$(get_alias_options "$CMD_NAME")
+    if [[ "$CMD" == "$CMD_NAME" ]]; then
+        # No alias found, convert path if it's a file
+        if [[ -f "$CMD_NAME" || -d "$CMD_NAME" ]]; then
+            CMD="$(wslpath -w "$1")"
+        else
+            CMD="$1"
+        fi
+    fi
+    shift                  # Remove the command itself
+    ARGS_TO_PROCESS=("$@") # Remaining are arguments to the command
+fi
+
+# Add alias options first if they exist
+if [[ -n "$ALIAS_OPTIONS" ]]; then
+    # Split alias options by spaces and process each for path conversion
+    IFS=' ' read -ra ALIAS_OPTS <<<"$ALIAS_OPTIONS"
+    for opt in "${ALIAS_OPTS[@]}"; do
+        # Apply the same path conversion logic as regular arguments
+        if [[ -f "$opt" || -d "$opt" ]]; then
+            # Convert file/directory paths to Windows format
+            CMDARGS+=("$(wslpath -w "$opt")")
+        else
+            CMDARGS+=("$opt")
+        fi
+    done
 fi
 
 # Process arguments for path conversion
@@ -114,7 +332,15 @@ done
 
 # Debug/Logging
 mkdir -p ${HOME}/.local/state/wslutil
-echo "win-run ${RAW_FLAG_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+RAW_FLAG_LOG=""
+if [ "$RAW_OUTPUT" = true ]; then
+    RAW_FLAG_LOG="--raw "
+fi
+ALIAS_LOG=""
+if [[ "$CMD" != "$CMD_NAME" ]]; then
+    ALIAS_LOG="(alias: $CMD_NAME -> $CMD) "
+fi
+echo "win-run ${RAW_FLAG_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
 
 set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
