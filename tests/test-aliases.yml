@@ -1,0 +1,19 @@
+aliases:
+  ipconfig.exe:
+    path: ${WIN_WINDIR}/System32/ipconfig.exe
+    options: null
+  testcmd:
+    path: ${WIN_WINDIR}/System32/ipconfig.exe
+    options: null
+  envtest:
+    path: ${WIN_WINDIR}/System32/ipconfig.exe
+    options: "/all"
+  usertest:
+    path: ${WIN_WINDIR}/System32/whoami.exe
+    options: "/user /groups"
+  pingtest:
+    path: ${WIN_WINDIR}/System32/ping.exe
+    options: "-n 2"
+  listtest:
+    path: ${WIN_WINDIR}/System32/cmd.exe
+    options: "/c dir"
