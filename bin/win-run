@@ -19,15 +19,19 @@
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 
+#
+# Forcibly ensure that output is UTF-8 encoded, need to peek at input to detect if its
+# utf-16le (aka unicode) or if its already utf-8.   This is essential for processing output
+# from windows called via powershell.   I have found  no mechanism to do this reliably
+# in bash directly.   This is performed as an embedded python3 script so as not to add yet
+# another script to the system.
+#
 function ensure_utf8 {
     # Pipe stdin directly to the python3 interpreter.
     # The 'EOF' is quoted to prevent shell expansion within the Python code,
     # ensuring the code is passed literally.
     python3 -c '
 import sys
-
-# This code will be executed by the Python interpreter,
-# while its stdin is connected to the pipe from the previous command.
 
 def main():
     # Read the ENTIRE raw byte stream from stdin.
@@ -77,7 +81,6 @@ if __name__ == "__main__":
 '
 }
 
-# Define path to the custom wslpath wrapper
 CMDARGS=()
 RAW_OUTPUT=false
 
@@ -85,14 +88,7 @@ if [[ -L "$0" ]]; then
     # Invoked via symlink
     SYM="SYM-"
     CMD=$(basename "$0")
-    ARGS_TO_PROCESS_TEMP=("$@")
-    if [[ "${ARGS_TO_PROCESS_TEMP[0]}" == "--raw" ]]; then
-        RAW_OUTPUT=true
-        # Slice the array from the second element if --raw is present
-        ARGS_TO_PROCESS=("${ARGS_TO_PROCESS_TEMP[@]:1}")
-    else
-        ARGS_TO_PROCESS=("${ARGS_TO_PROCESS_TEMP[@]}")
-    fi
+    ARGS_TO_PROCESS=("$@")
 else
     # Invoked directly
     SYM=""
@@ -115,21 +111,14 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
         CMDARGS+=("${i}")
     fi
 done
+
+# Debug/Logging
+mkdir -p ${HOME}/.local/state/wslutil
+echo "win-run ${RAW_FLAG_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+
+set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
     "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}"
 else
-    #"$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
-    #"$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | iconv -f UTF-16LE -t UTF-8 | dos2unix
     "$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | ensure_utf8
-    #"$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | dos2unix
 fi
-# $POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
-#$POWERSHELL_EXE -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; '"${CMD} ${CMDARGS[@]}"
-
-mkdir -p ${HOME}/.local/state/wslutil
-RAW_FLAG_LOG=""
-if [ "$RAW_OUTPUT" = true ]; then
-    RAW_FLAG_LOG="--raw "
-fi
-echo "win-run ${RAW_FLAG_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
-exit 0
