@@ -18,11 +18,11 @@
 #
 
 # Set up environment variables for alias resolution
-WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-/mnt/c/Program\ Files}
-WIN_PROGRAMFILES_X86=${WIN_PROGRAMFILES_X86:-/mnt/c/Program\ Files\ \(x86\)}
-WIN_LOCALAPPDATA=${WIN_LOCALAPPDATA:-$(wslpath "${WIN_ENV[LOCALAPPDATA]}" 2>/dev/null || echo "/mnt/c/Users/$USER/AppData/Local")}
-WIN_APPDATA=${WIN_APPDATA:-$(wslpath "${WIN_ENV[APPDATA]}" 2>/dev/null || echo "/mnt/c/Users/$USER/AppData/Roaming")}
+export WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+export WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-/mnt/c/Program\ Files}
+export WIN_PROGRAMFILES_X86=${WIN_PROGRAMFILES_X86:-/mnt/c/Program\ Files\ \(x86\)}
+export WIN_LOCALAPPDATA=${WIN_LOCALAPPDATA:-/mnt/c/Users/$USER/AppData/Local}
+export WIN_APPDATA=${WIN_APPDATA:-/mnt/c/Users/$USER/AppData/Roaming}
 
 # Function to display help information
 show_help() {
@@ -43,6 +43,7 @@ DESCRIPTION
 
 OPTIONS
     --raw           Bypass UTF-8 output processing (useful for binary output)
+    --plain         Skip automatic path conversion for arguments
     -c FILE         Use custom config file instead of default hierarchy
     --help          Show this help message and exit
 
@@ -68,6 +69,9 @@ EXAMPLES
 
     # Use custom config file
     win-run -c project-aliases.yml custom-tool.exe
+
+    # Skip path conversion for arguments (plain mode)
+    win-run --plain notepad.exe C:\Users\myuser\file.txt
 
     # Example alias configuration: ~/.config/wslutil/win-run.yml
     aliases:
@@ -235,6 +239,7 @@ if __name__ == "__main__":
 
 CMDARGS=()
 RAW_OUTPUT=false
+PLAIN_MODE=false
 CUSTOM_CONFIG=""
 
 if [[ -L "$0" ]]; then
@@ -257,6 +262,10 @@ else
             ;;
         --raw)
             RAW_OUTPUT=true
+            shift
+            ;;
+        --plain)
+            PLAIN_MODE=true
             shift
             ;;
         -c)
@@ -310,7 +319,7 @@ if [[ -n "$ALIAS_OPTIONS" ]]; then
     IFS=' ' read -ra ALIAS_OPTS <<<"$ALIAS_OPTIONS"
     for opt in "${ALIAS_OPTS[@]}"; do
         # Apply the same path conversion logic as regular arguments
-        if [[ -f "$opt" || -d "$opt" ]]; then
+        if [[ "$PLAIN_MODE" = false && (-f "$opt" || -d "$opt") ]]; then
             # Convert file/directory paths to Windows format
             CMDARGS+=("$(wslpath -w "$opt")")
         else
@@ -321,7 +330,7 @@ fi
 
 # Process arguments for path conversion
 for i in "${ARGS_TO_PROCESS[@]}"; do
-    if [[ -f $i || -d $i ]]; then
+    if [[ "$PLAIN_MODE" = false && (-f $i || -d $i) ]]; then
         # Anything that is a file or directory will be converted to a windows path, potentially with a substituted drive letter
         # Use the -W flag to invoke the substitution logic in our wrapper
         CMDARGS+=("$(wslpath -w "${i}")")
@@ -332,15 +341,18 @@ done
 
 # Debug/Logging
 mkdir -p ${HOME}/.local/state/wslutil
-RAW_FLAG_LOG=""
+FLAGS_LOG=""
 if [ "$RAW_OUTPUT" = true ]; then
-    RAW_FLAG_LOG="--raw "
+    FLAGS_LOG+="--raw "
+fi
+if [ "$PLAIN_MODE" = true ]; then
+    FLAGS_LOG+="--plain "
 fi
 ALIAS_LOG=""
 if [[ "$CMD" != "$CMD_NAME" ]]; then
     ALIAS_LOG="(alias: $CMD_NAME -> $CMD) "
 fi
-echo "win-run ${RAW_FLAG_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+echo "win-run ${FLAGS_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
 
 set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
