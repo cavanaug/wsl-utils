@@ -39,6 +39,6 @@ default:
         # - brave.exe #         # just set it as your default browser and use win-browser
         # - librewolf.exe #     # just set it as your default browser and use win-browser
         # - firefox.exe #       # just set it as your default browser and use win-browser
-        # - notepad.exe #       # just set it as the default txt editor and use win-open
+        - notepad.exe #       # just set it as the default txt editor and use win-open
         # - notepad++.exe #     # just set it as the default txt editor and use win-open
         # - wt.exe #            # ive thought about trying to use wt.exe commands instead of tmux
