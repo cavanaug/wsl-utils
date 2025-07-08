@@ -59,7 +59,6 @@ REQUIRED_COMMANDS=(
     "/usr/bin/wayland-info"
     "/usr/sbin/update-binfmts"
     "/usr/bin/dos2unix"
-    "/usr/bin/iconv"
     "/usr/bin/dconf"
 )
 # We will use apt-file later, so PACKAGE_MAP is no longer needed.
