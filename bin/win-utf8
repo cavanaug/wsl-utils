@@ -1,0 +1,80 @@
+#!/bin/bash
+# ┌───────────────────────────────────────────────────────────────────────┐
+# │                                                                       │
+# │    ██╗    ██╗██╗███╗   ██╗      ██╗   ██╗████████╗███████╗ █████╗     │
+# │    ██║    ██║██║████╗  ██║      ██║   ██║╚══██╔══╝██╔════╝██╔══██╗    │
+# │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██║   ██║   ██║   █████╗  ╚█████╔╝    │
+# │    ██║███╗██║██║██║╚██╗██║╚════╝██║   ██║   ██║   ██╔══╝  ██╔══██╗    │
+# │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╔╝   ██║   ██║     ╚█████╔╝    │
+# │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝    ╚═╝   ╚═╝      ╚════╝     │
+# │                                                                       │
+# └───────────────────────────────────────────────────────────────────────┘
+#  win-utf8
+#  - Converts Windows command output to UTF-8 with Unix line endings
+#  - Handles both UTF-16LE with BOM and BOM-less UTF-16LE from PowerShell/cmd.exe
+#  - Generally you are better off using win-run <exe> which will automatically take care of this for you
+#
+# Usage: <windows command file powershell.exe or cmd.exe> | win-utf8
+#
+# Forcibly ensure that output is UTF-8 encoded, need to peek at input to detect if its
+# utf-16le (aka unicode) or if its already utf-8.   This is essential for processing output
+# from windows called via powershell.   I have found  no mechanism to do this reliably
+# in bash directly.   This is performed as an embedded python3 script so as not to add yet
+# another script to the system.
+#
+function ensure_utf8 {
+    # Pipe stdin directly to the python3 interpreter.
+    # The 'EOF' is quoted to prevent shell expansion within the Python code,
+    # ensuring the code is passed literally.
+    python3 -c '
+import sys
+
+def main():
+    # Read the ENTIRE raw byte stream from stdin.
+    # .buffer is the crucial part that provides binary-safe I/O.
+    try:
+        input_bytes = sys.stdin.buffer.read()
+    except (IOError, KeyboardInterrupt):
+        # Handle cases where the pipe might be broken or user interrupts.
+        return
+
+    # If there is no input, there is nothing to do.
+    if not input_bytes:
+        return
+
+    # Default to assuming the input is already valid.
+    output_bytes = input_bytes
+
+    # Heuristic check for UTF-16LE (with or without BOM).
+    if len(input_bytes) >= 2:
+        # Case 1: Check for the standard UTF-16LE BOM (FF FE).
+        is_bom_utf16le = input_bytes.startswith(b"\xff\xfe")
+
+        # Case 2: Check for BOM-less UTF-16LE (ASCII char followed by null).
+        is_bomless_utf16le = (input_bytes[1] == 0 and input_bytes[0] != 0)
+
+        if is_bom_utf16le or is_bomless_utf16le:
+            try:
+                # Decode the bytes from UTF-16LE into a standard Python string.
+                decoded_string = input_bytes.decode("utf-16-le")
+                # Re-encode the string into our target format: UTF-8.
+                output_bytes = decoded_string.encode("utf-8")
+            except UnicodeDecodeError:
+                # If decoding fails for some reason (e.g., malformed stream),
+                # fall back to printing the original bytes to avoid data loss.
+                pass
+
+    # Write the resulting bytes to stdout, again using the binary buffer.
+    try:
+        sys.stdout.buffer.write(output_bytes)
+        sys.stdout.buffer.flush()
+    except (IOError, KeyboardInterrupt):
+        # Handle broken pipe on output.
+        pass
+
+if __name__ == "__main__":
+    main()
+'
+}
+
+ensure_utf8 | dos2unix
