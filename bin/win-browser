@@ -35,8 +35,9 @@ BROWSER=$(wslpath -u "${PROGPATH}")
 #BROWSER=/mnt/c/Program\ Files/BraveSoftware/Brave-Browser/Application/brave.exe
 
 # Launch the browser with the modified arguments
-# TODO: Add logging only if a debug flag is set
-mkdir -p ${HOME}/.local/state/wslutil
-echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-browser.log
+if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+    mkdir -p ${HOME}/.local/state/wslutil
+    echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-browser.log
+fi
 "${BROWSER}" "${cliargs[@]}"
 #powerShell.exe -NoProfile start $url

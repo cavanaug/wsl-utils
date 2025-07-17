@@ -58,12 +58,16 @@ fi
 
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 
-# TODO: Add logging only if a debug flag is set
-mkdir -p ${HOME}/.local/state/wslutil
 if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-paste ]]; then
-    echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+        mkdir -p ${HOME}/.local/state/wslutil
+        echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    fi
     /usr/bin/wl-paste -n "$@"
 else
-    echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+        mkdir -p ${HOME}/.local/state/wslutil
+        echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    fi
     "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))'
 fi

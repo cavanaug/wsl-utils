@@ -58,11 +58,16 @@ EOF
 fi
 
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-mkdir -p ${HOME}/.local/state/wslutil
 if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-copy ]]; then
-    echo "$(date --rfc-3339=s) - /usr/bin/wl-copy [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+        mkdir -p ${HOME}/.local/state/wslutil
+        echo "$(date --rfc-3339=s) - /usr/bin/wl-copy [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    fi
     /usr/bin/wl-copy "$@"
 else
-    echo "$(date --rfc-3339=s) - win-copy script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+        mkdir -p ${HOME}/.local/state/wslutil
+        echo "$(date --rfc-3339=s) - win-copy script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+    fi
     "${WIN_WINDIR}/System32/clip.exe" "$@"
 fi

@@ -22,6 +22,8 @@ for i in "$@"; do
         cliargs+=("${i}")
     fi
 done
-mkdir -p ${HOME}/.local/state/wslutil
-echo "win-open ${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-open.log
+if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+    mkdir -p ${HOME}/.local/state/wslutil
+    echo "win-open ${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-open.log
+fi
 "${WIN_WINDIR}/explorer.exe" "${cliargs[@]}"

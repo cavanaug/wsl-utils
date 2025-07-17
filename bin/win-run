@@ -340,19 +340,21 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
 done
 
 # Debug/Logging
-mkdir -p ${HOME}/.local/state/wslutil
-FLAGS_LOG=""
-if [ "$RAW_OUTPUT" = true ]; then
-    FLAGS_LOG+="--raw "
+if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+    mkdir -p ${HOME}/.local/state/wslutil
+    FLAGS_LOG=""
+    if [ "$RAW_OUTPUT" = true ]; then
+        FLAGS_LOG+="--raw "
+    fi
+    if [ "$PLAIN_MODE" = true ]; then
+        FLAGS_LOG+="--plain "
+    fi
+    ALIAS_LOG=""
+    if [[ "$CMD" != "$CMD_NAME" ]]; then
+        ALIAS_LOG="(alias: $CMD_NAME -> $CMD) "
+    fi
+    echo "win-run ${FLAGS_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
 fi
-if [ "$PLAIN_MODE" = true ]; then
-    FLAGS_LOG+="--plain "
-fi
-ALIAS_LOG=""
-if [[ "$CMD" != "$CMD_NAME" ]]; then
-    ALIAS_LOG="(alias: $CMD_NAME -> $CMD) "
-fi
-echo "win-run ${FLAGS_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
 
 set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
