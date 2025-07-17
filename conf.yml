@@ -1,34 +1,40 @@
 default:
     winexe:
         ########################################
-        # Windows Built (Direct Link)
+        # Windows Built (Direct SymLink)
         # - These are the default windows commands that I want to be able to run from WSL
         # - Beware though that file arguments may not work as expected unless you use the windows path
+        # - One benefit for using a direct symlink is that win-run does add about 500ms of overhead
         ########################################
-        # - cmd.exe #          # You really really shouldnt be using this anymore...
-        - powerShell.exe #   #Used a slightly different name to avoid handling in git-browse
-        ########################################
-        # Windows Built (Shim)
-        # - These are linked to win-run which will try to fix any arguments to be windows compatible
-        ########################################
-        - curl.exe # Sometimes used to test network connectivity & proxy
+        - cmd.exe #                 # You really really shouldnt be using this anymore...
+        - powerShell.exe #          # Used a slightly different name to avoid handling in git-browse
+        - rundll32.exe #            # Used by win-browser & xdg-open for browser launch
         - ipconfig.exe
-        - netsh.exe
         - net.exe
-        - subst.exe
-        - reg.exe
-        - regedit.exe
+        - netsh.exe
         - systeminfo.exe
         - taskkill.exe
         - tasklist.exe
-        - taskmgr.exe
-        - wsl.exe
+        - code
+        - code-insiders
         ########################################
         # Windows ADMIN CLI Extras (Dont work in my corporate environment :-( )
         ########################################
         # - winget.exe #     # Doesnt work right due to needing elevated permissions for changes
         # - SUDO.exe #       # Recased so as not to conflic with the linux sudo codmmand
         # - gsudo.exe #      # gsudo is a sudo replacement for windows that theoretically works with wsl
+    winrun:
+        ########################################
+        # Windows Built (Shim)
+        # - These are linked to win-run which will try to fix any arguments to be windows compatible
+        # - It will also attempt to fix the character encoding to utf8 for all output
+        ########################################
+        - curl.exe #         # Sometimes used to test network connectivity & proxy
+        - subst.exe
+        - reg.exe
+        - regedit.exe
+        - taskmgr.exe
+        - wsl.exe
         ########################################
         # Windows GUI Extras
         # - Generally for gui apps its best to just utilize win-open <file> to open the file in the default app
@@ -40,5 +46,5 @@ default:
         # - librewolf.exe #     # just set it as your default browser and use win-browser
         # - firefox.exe #       # just set it as your default browser and use win-browser
         - notepad.exe #       # just set it as the default txt editor and use win-open
-        # - notepad++.exe #     # just set it as the default txt editor and use win-open
+        - notepad++.exe #     # just set it as the default txt editor and use win-open
         # - wt.exe #            # ive thought about trying to use wt.exe commands instead of tmux

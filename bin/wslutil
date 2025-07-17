@@ -123,14 +123,16 @@ upgrade)
     fi
 
     # Handle external commands if they exist
+    sub_command="$1"
     local_command="${WSLUTIL_DIR}/bin/wslutil-$1"
+    shift
     if [[ -x "$local_command" ]]; then
         # Execute the command found in the wslutil bin directory
         "$local_command" "$@"
         exit $?
     elif command -v "wslutil-$1" >/dev/null 2>&1; then
         # Execute the command found in the system PATH
-        "wslutil-$1" "$@"
+        "wslutil-${sub_command}" "$@"
         exit $?
     else
         # Command not found in either location

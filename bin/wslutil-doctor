@@ -38,6 +38,8 @@ while [[ $# -gt 0 ]]; do
     --autofix)
         AUTOFIX=1
         shift
+        echo "Autofix is still TBD"
+        exit 1
         ;;
     --help)
         show_help
@@ -217,7 +219,7 @@ FILE_CONTENT_PASSED=0
 if command -v crudini >/dev/null 2>&1; then
     printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "File Content Checks"
     if [ -e "/etc/wsl.conf" ]; then
-        for section in boot user; do
+        for section in boot user interop; do
             printf "["
             if crudini --get /etc/wsl.conf "$section" &>/dev/null; then
                 printf "$CHECK"
@@ -316,7 +318,7 @@ else
     fi
     if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
         printf "\n${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
-        printf "  ${GREEN}sudo wslutil init${RESET}\n"
+        printf "  ${GREEN}wslutil setup${RESET}\n"
     fi
     printf "\n"
 fi
