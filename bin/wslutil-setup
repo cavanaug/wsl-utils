@@ -1,0 +1,419 @@
+#!/usr/bin/bash
+#
+# ┌───────────────────────────────────────────────────────────┐
+# │                       WSLUTIL                             │
+# │                                                           │
+# │        ███████╗███████╗████████╗██╗   ██╗██████╗          │
+# │        ██╔════╝██╔════╝╚══██╔══╝██║   ██║██╔══██╗         │
+# │        ███████╗█████╗     ██║   ██║   ██║██████╔╝         │
+# │        ╚════██║██╔══╝     ██║   ██║   ██║██╔═══╝          │
+# │        ███████║███████╗   ██║   ╚██████╔╝██║              │
+# │        ╚══════╝╚══════╝   ╚═╝    ╚═════╝ ╚═╝              │
+# │                                                           │
+# └───────────────────────────────────────────────────────────┘
+# wslutil-setup - Configure and merge wslutil settings
+
+show_help() {
+    cat <<EOF
+Usage: wslutil-setup [OPTIONS]
+
+Configure and merge wslutil settings into system configuration files.
+
+This command performs the following configuration merging:
+- wslutil.conf: Creates symlinks for Windows executables in bin directory
+- wsl.conf: Merges settings into /etc/wsl.conf
+- wslconfig: Merges settings into \${WIN_USERPROFILE}/.wslconfig
+- wslgconfig: Merges settings into \${WIN_USERPROFILE}/.wslgconfig
+
+Options:
+  --dry-run    Show what would be done without making changes
+  --help       Show this help message and exit
+
+Examples:
+  wslutil-setup                 # Perform configuration setup
+  wslutil-setup --dry-run       # Preview changes without applying
+  wslutil-setup --help          # Show this help message
+
+Note: The crudini utility is required for configuration file merging.
+      Run 'wslutil doctor' to check for all required dependencies.
+
+EOF
+}
+
+# Parse command line arguments
+DRY_RUN=0
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+    --help)
+        show_help
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
+    esac
+done
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if running in dry-run mode
+if [[ $DRY_RUN -eq 1 ]]; then
+    log_info "Running in dry-run mode - no changes will be made"
+fi
+
+# Get the directory where wslutil is installed
+WSLUTIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CONFIG_DIR="$WSLUTIL_DIR/config"
+
+log_info "Using configuration directory: $CONFIG_DIR"
+
+# Check if crudini is available
+if ! command -v crudini &>/dev/null; then
+    log_error "crudini is required but not installed"
+    log_error "Please install crudini and try again"
+    log_error "Run 'wslutil doctor' to check for all required dependencies"
+    exit 1
+fi
+
+# Function to merge INI-style configuration files using crudini
+merge_config_file() {
+    local source_file="$1"
+    local target_file="$2"
+    local description="$3"
+
+    if [[ ! -f "$source_file" ]]; then
+        log_warning "Source file not found: $source_file"
+        return 1
+    fi
+
+    log_info "Merging $description: $source_file -> $target_file"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_info "[DRY-RUN] Would merge configuration into $target_file"
+        return 0
+    fi
+
+    # Determine if we need sudo for system files
+    local use_sudo=""
+    if [[ "$target_file" == /etc/* ]]; then
+        use_sudo="sudo"
+        log_info "System file detected, using sudo for operations"
+        log_warning "You may be prompted for your password to modify system files"
+    fi
+
+    # Create target directory if it doesn't exist
+    local target_dir
+    target_dir=$(dirname "$target_file")
+    if [[ ! -d "$target_dir" ]]; then
+        $use_sudo mkdir -p "$target_dir"
+        log_info "Created directory: $target_dir"
+    fi
+
+    # Create target file if it doesn't exist
+    if [[ ! -f "$target_file" ]]; then
+        $use_sudo touch "$target_file"
+        log_info "Created target file: $target_file"
+    fi
+
+    # Use crudini --merge to merge the entire source file into target
+    if [[ -n "$use_sudo" ]]; then
+        $use_sudo crudini --merge "$target_file" <"$source_file"
+    else
+        crudini --merge "$target_file" <"$source_file"
+    fi
+
+    log_success "Successfully merged $description"
+}
+
+# Function to process wslutil.yml for symlink creation
+process_winutil_config() {
+    local config_file="$1"
+
+    if [[ ! -f "$config_file" ]]; then
+        log_warning "wslutil.yml not found: $config_file"
+        return 1
+    fi
+
+    log_info "Processing wslutil configuration for symlinks: $config_file"
+
+    # Check if yq is available for YAML processing
+    if ! command -v yq &>/dev/null; then
+        log_error "yq is required for YAML processing but not installed"
+        log_error "Please install yq and try again"
+        return 1
+    fi
+
+    # Process winrun entries (symlink to win-run script)
+    log_info "Processing winrun entries..."
+    local winrun_entries
+    winrun_entries=$(yq eval '.winrun[]' "$config_file" 2>/dev/null | sed 's/ *#.*$//' | grep -v '^$' || true)
+
+    if [[ -n "$winrun_entries" ]]; then
+        while IFS= read -r entry; do
+            [[ -z "$entry" ]] && continue
+            create_symlink_to_winrun "$entry"
+        done <<<"$winrun_entries"
+    else
+        log_info "No winrun entries found in $config_file"
+    fi
+
+    # Process winexe entries (direct symlinks to Windows executables)
+    log_info "Processing winexe entries..."
+    local winexe_entries
+    winexe_entries=$(yq eval '.winexe[]' "$config_file" 2>/dev/null | sed 's/ *#.*$//' | grep -v '^$' || true)
+
+    if [[ -n "$winexe_entries" ]]; then
+        while IFS= read -r entry; do
+            [[ -z "$entry" ]] && continue
+            create_direct_symlink "$entry"
+        done <<<"$winexe_entries"
+    else
+        log_info "No winexe entries found in $config_file"
+    fi
+}
+
+# Function to create symlink to win-run script
+create_symlink_to_winrun() {
+    local executable="$1"
+    local target_link="$WSLUTIL_DIR/bin/$executable"
+    local win_run_script="$WSLUTIL_DIR/bin/win-run"
+
+    if [[ ! -f "$win_run_script" ]]; then
+        log_error "win-run script not found: $win_run_script"
+        return 1
+    fi
+
+    # Check if symlink already exists and points to the correct target
+    if [[ -L "$target_link" && "$(readlink "$target_link")" == "$win_run_script" ]]; then
+        log_info "Symlink already exists: $executable -> win-run (skipping)"
+        return 0
+    fi
+
+    log_info "Creating winrun symlink: $executable -> win-run"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_info "[DRY-RUN] Would create symlink: $target_link -> $win_run_script"
+        return 0
+    fi
+
+    # Remove existing link/file if it exists
+    if [[ -e "$target_link" || -L "$target_link" ]]; then
+        rm -f "$target_link"
+        log_info "Removed existing: $target_link"
+    fi
+
+    # Create the symlink (use relative path since both are in the same directory)
+    if ln -s "win-run" "$target_link"; then
+        log_success "Created symlink: $executable -> win-run"
+    else
+        log_error "Failed to create symlink: $target_link"
+        return 1
+    fi
+}
+
+# Function to create direct symlink to Windows executable
+create_direct_symlink() {
+    local executable="$1"
+    local win_executable=""
+    local symlink_name=""
+
+    # Perform variable expansion on the executable path
+    executable=$(eval echo "$executable")
+
+    # Check if this is a full path or just an executable name
+    if [[ "$executable" == /* ]]; then
+        # Full path provided - use it directly
+        win_executable="$executable"
+        # Extract basename for symlink name
+        symlink_name=$(basename "$executable")
+        
+        # For full paths, check if the file exists before proceeding
+        if [[ ! -f "$win_executable" ]]; then
+            log_info "Skipping missing executable: $win_executable"
+            return 0
+        fi
+    else
+        # Just executable name - search in cache
+        symlink_name="$executable"
+        
+        # Use the same cache approach as programs.sh
+        local XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
+        local programs_cache="$XDG_CACHE_HOME/wslutil/programs"
+
+        # Create cache if it doesn't exist or is older than 30 days
+        if [[ ! -f "$programs_cache" ]] || [[ $(find "$programs_cache" -mtime +30 2>/dev/null) ]]; then
+            log_info "Building/updating Windows executable cache..."
+            update_programs_cache "$programs_cache"
+        fi
+
+        # Search for the executable in the cache
+        if [[ -f "$programs_cache" ]]; then
+            # Look for exact filename match (case-insensitive)
+            win_executable=$(grep -i "/${executable}$" "$programs_cache" | head -n1)
+        fi
+
+        if [[ -z "$win_executable" ]]; then
+            log_warning "Windows executable not found in cache: $executable"
+            return 1
+        fi
+    fi
+
+    local target_link="$WSLUTIL_DIR/bin/$symlink_name"
+
+    # Verify the executable actually exists
+    if [[ ! -f "$win_executable" ]]; then
+        log_warning "Executable path does not exist: $win_executable"
+        return 1
+    fi
+
+    # Check if symlink already exists and points to the correct target
+    if [[ -L "$target_link" && "$(readlink "$target_link")" == "$win_executable" ]]; then
+        log_info "Symlink already exists: $symlink_name -> $win_executable (skipping)"
+        return 0
+    fi
+
+    log_info "Creating direct symlink: $symlink_name -> $win_executable"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_info "[DRY-RUN] Would create symlink: $target_link -> $win_executable"
+        return 0
+    fi
+
+    # Remove existing link/file if it exists
+    if [[ -e "$target_link" || -L "$target_link" ]]; then
+        rm -f "$target_link"
+        log_info "Removed existing: $target_link"
+    fi
+
+    # Create the symlink
+    if ln -s "$win_executable" "$target_link"; then
+        log_success "Created direct symlink: $symlink_name -> $win_executable"
+    else
+        log_error "Failed to create symlink: $target_link"
+        return 1
+    fi
+}
+
+# Function to update the Windows programs cache
+update_programs_cache() {
+    local programs_cache="$1"
+    
+    # Create cache directory
+    mkdir -p "$(dirname "$programs_cache")"
+    
+    # Remove old cache if it exists
+    [[ -f "$programs_cache" ]] && rm -f "$programs_cache"
+    
+    # Set default paths if not already set
+    local WIN_WINDIR="${WIN_WINDIR:-/mnt/c/Windows}"
+    local WIN_PROGRAMFILES="${WIN_PROGRAMFILES:-/mnt/c/Program Files}"
+    local WIN_PROGRAMFILES_X86="${WIN_PROGRAMFILES_X86:-/mnt/c/Program Files (x86)}"
+    local WIN_USERPROFILE="${WIN_USERPROFILE:-/mnt/c/Users/$(whoami)}"
+    
+    # Scan directories for .exe files (same as programs.sh)
+    local scan_dirs=(
+        "$WIN_WINDIR"
+        "$WIN_PROGRAMFILES"
+        "$WIN_PROGRAMFILES_X86"
+        "$WIN_USERPROFILE/AppData/Local/Programs/"
+    )
+    
+    for dir in "${scan_dirs[@]}"; do
+        if [[ -d "$dir" ]]; then
+            log_info "Scanning for executables in: $dir"
+            find "$dir" -type f -iname "*.exe" 2>/dev/null >> "$programs_cache" || true
+        fi
+    done
+    
+    log_info "Windows executable cache updated: $programs_cache"
+}
+
+# Function to process configuration files from a given directory
+process_config_directory() {
+    local config_dir="$1"
+    local phase_name="$2"
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_info "Config directory not found: $config_dir (skipping $phase_name)"
+        return 0
+    fi
+
+    log_info "=== Phase: $phase_name ==="
+    log_info "Processing configuration files from: $config_dir"
+
+    # Process wslutil.yml
+    if [[ -f "$config_dir/wslutil.yml" ]]; then
+        process_winutil_config "$config_dir/wslutil.yml"
+    fi
+
+    # Merge wsl.conf into /etc/wsl.conf
+    if [[ -f "$config_dir/wsl.conf" ]]; then
+        merge_config_file "$config_dir/wsl.conf" "/etc/wsl.conf" "WSL configuration ($phase_name)"
+    fi
+
+    # Check if WIN_USERPROFILE is set for Windows config files
+    if [[ -z "$WIN_USERPROFILE" ]]; then
+        log_warning "WIN_USERPROFILE not set - skipping Windows config files for $phase_name"
+        log_warning "Please run 'eval \"\$(wslutil shellenv)\"' first to set up the environment"
+    else
+        # Merge wslconfig into Windows user profile
+        if [[ -f "$config_dir/wslconfig" ]]; then
+            merge_config_file "$config_dir/wslconfig" "$WIN_USERPROFILE/.wslconfig" "WSL2 configuration ($phase_name)"
+        fi
+
+        # Merge wslgconfig into Windows user profile
+        if [[ -f "$config_dir/wslgconfig" ]]; then
+            merge_config_file "$config_dir/wslgconfig" "$WIN_USERPROFILE/.wslgconfig" "WSLg configuration ($phase_name)"
+        fi
+    fi
+}
+
+# Main setup process
+main() {
+    log_info "Starting wslutil configuration setup"
+
+    # Phase 1: Process system/default configuration files
+    process_config_directory "$CONFIG_DIR" "System Configuration"
+
+    # Phase 2: Process user-specific configuration files
+    local user_config_dir="$HOME/.config/wslutil"
+    process_config_directory "$user_config_dir" "User Configuration"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_info "Dry-run completed - no changes were made"
+    else
+        log_success "Configuration setup completed"
+        log_info "Note: Some changes may require restarting WSL to take effect"
+    fi
+}
+
+# Run main function
+main

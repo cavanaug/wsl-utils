@@ -27,17 +27,30 @@ for i in "$@"; do
     fi
 done
 
-# Determine the path to the current default windows browser
-# - yes this runtime detection is a bit slow, but is required to make things dynamic
-PROGID=$(${WIN_WINDIR}/System32/reg.exe QUERY 'HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' /s | awk 'gsub(/\r/,"")' | grep -i ProgId | sed -e 's/  */ /g' | cut -f4 -d' ')
-PROGPATH=$(${WIN_WINDIR}/System32/cmd.exe /C 'ftype' 2>/dev/null | grep "${PROGID}" | cut -f2 -d\")
-BROWSER=$(wslpath -u "${PROGPATH}")
-#BROWSER=/mnt/c/Program\ Files/BraveSoftware/Brave-Browser/Application/brave.exe
+# -----------------------------------
+# Method 1 - From the registry user choice key, requires more parsing
+#
+# PROGID=$(${WIN_WINDIR}/System32/reg.exe QUERY 'HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice' /s | awk 'gsub(/\r/,"")' | grep -i ProgId | sed -e 's/  */ /g' | cut -f4 -d' ')
+# PROGPATH=$(${WIN_WINDIR}/System32/cmd.exe /C 'ftype' 2>/dev/null | grep "${PROGID}" | cut -f2 -d\")
+# BROWSER=$(wslpath -u "${PROGPATH}")
+# BROWSER_ARGS=""
+#
+# -----------------------------------
+# Method 2 - Call the perceived default browser via the "start" command
+# BROWSER=powerShell.exe
+# BROWSER_ARGS="-NoProfile start"
+#
+# BROWSER=/mnt/c/Program\ Files/BraveSoftware/Brave-Browser/Application/brave.exe
+#
+# -----------------------------------
+# Method 3 - Call the protocol handler via rundll32
+#
+BROWSER=rundll32.exe
+BROWSER_ARGS="url.dll,FileProtocolHandler"
 
 # Launch the browser with the modified arguments
 if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
     mkdir -p ${HOME}/.local/state/wslutil
-    echo "$BROWSER" "${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-browser.log
+    echo "$BROWSER" "$BROWSER_ARGS" "${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-browser.log
 fi
-"${BROWSER}" "${cliargs[@]}"
-#powerShell.exe -NoProfile start $url
+"${BROWSER}" "${BROWSER_ARGS}" "${cliargs[@]}"

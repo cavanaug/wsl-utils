@@ -14,8 +14,8 @@ winexe:
     - systeminfo.exe
     - taskkill.exe
     - tasklist.exe
-    - code
-    - code-insiders
+    - "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
+    - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"
     ########################################
     # Windows ADMIN CLI Extras (Dont work in my corporate environment :-( )
     ########################################

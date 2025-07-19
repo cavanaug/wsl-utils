@@ -85,6 +85,7 @@ check_command() {
 # Command checks (full paths)
 REQUIRED_COMMANDS=(
     "/usr/bin/crudini"
+    "/usr/bin/yq"
     "/usr/bin/wl-copy"
     "/usr/bin/wayland-info"
     "/usr/sbin/update-binfmts"
