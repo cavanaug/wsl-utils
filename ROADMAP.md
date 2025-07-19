@@ -34,4 +34,4 @@ Your contributions are highly appreciated!
 
 ## Disclaimer
 
-This roadmap provides a general overview of our plans and intentions. It is not a guarantee of future features or timelines. Priorities may shift based on community feedback, resource availability, and unforeseen challenges.
+This roadmap provides a general overview of plans and intentions. It is not a guarantee of future features or timelines. Priorities may shift based on feedback, resource availability, and unforeseen challenges.

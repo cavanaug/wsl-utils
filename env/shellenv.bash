@@ -27,7 +27,9 @@ if [[ ! -f "${WIN_COMSPEC}" ]]; then
     exit 1
 fi
 
-# Set some global environment variables for WINDOWS for use in any cli usage
+#
+# Setup the WIN_* global environment variables for WINDOWS for use in any cli usage
+#
 # WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
 # - Source ${WIN_ENV}.sh to gain access to these variables
 # - Any directories in these variables will be converted to WSL format
@@ -64,6 +66,10 @@ declare -g -x WIN_PROGRAMFILES="${WIN_ENV[ProgramFiles]}"
 declare -g -x WIN_PROGRAMFILES_X86="${WIN_ENV['ProgramFiles_x86']}"
 declare -g -x WIN_HOMEPATH="${WIN_ENV[HOMEDRIVE]}${WIN_ENV[HOMEPATH]}"
 
+#
+# Setup the graphical environment for WSL2 GUI apps
+# - wslg is required for things like clipboard support
+# - Attempt to correct scaling for high DPI displays
 if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then
     # Ensure WSL2 GUI apps are enabled and set the DISPLAY variable for GUI applications
     if [[ -z "${DISPLAY}" ]]; then
