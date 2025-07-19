@@ -212,7 +212,7 @@ create_symlink_to_winrun() {
     fi
 
     # Check if symlink already exists and points to the correct target
-    if [[ -L "$target_link" && "$(readlink "$target_link")" == "$win_run_script" ]]; then
+    if [[ -L "$target_link" && "$(readlink "$target_link")" == "win-run" ]]; then
         log_info "Symlink already exists: $executable -> win-run (skipping)"
         return 0
     fi
