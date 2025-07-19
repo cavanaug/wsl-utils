@@ -90,6 +90,16 @@ bats test_option_parsing.bats
   - Comprehensive error handling
   - Logging functionality
 
+- **`test_wslutil_setup.bats`** - Tests for wslutil-setup command
+  - Command-line option parsing (--help, --dry-run)
+  - YAML configuration processing (wslutil.yml)
+  - Symlink creation for winrun and winexe entries
+  - Variable expansion in configuration paths
+  - Two-phase processing (system and user configs)
+  - INI file merging with crudini
+  - Windows executable cache building and management
+  - Error handling for missing dependencies and files
+
 ### Helper Functions
 
 **`test_helpers.bash`** provides common test utilities:
