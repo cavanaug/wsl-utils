@@ -3,3 +3,28 @@ If wsl is not working, try to kill the wsl service and restart it.
     wsl.exe --shutdown
     taskkill.exe /f /im wslservice.exe
     wsl.exe --list
+
+----------------------------------
+Fix the x11 socket issue
+
+To make this persistent (as systemd-tmpfiles-setup.service can clear /tmp on reboot), you might need to create a systemd service:
+
+Create a file /etc/systemd/system/wslg-x11-link.service with the following content:
+
+[Unit]
+Description=Symlink /tmp/.X11-unix to /mnt/wslg/.X11-unix
+After=systemd-tmpfiles-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "rm -rf /tmp/.X11-unix && ln -s /mnt/wslg/.X11-unix /tmp/.X11-unix"
+
+[Install]
+WantedBy=sysinit.target
+Enable and start the service:
+
+Bash
+
+sudo systemctl enable wslg-x11-link.service
+sudo systemctl start wslg-x11-link.service
+

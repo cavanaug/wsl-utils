@@ -100,6 +100,14 @@ REQUIRED_FILES=(
     "/usr/lib/binfmt.d/WSLInterop.conf"
 )
 
+# Symlink checks
+REQUIRED_SYMLINKS=(
+    "/tmp/.X11-unix:/mnt/wslg/.X11-unix"
+)
+
+# Track missing symlinks for suggestions
+declare -A MISSING_SYMLINK_PATHS
+
 printf "${YELLOW}"
 printf "\n"
 printf "█   █ ▄▀▀▀▀ █     █   █ ▀▀█▀▀ ▀▀█▀▀ █           █▀▀▀▄ █▀▀▀▄ \n"
@@ -212,6 +220,34 @@ for file in "${REQUIRED_FILES[@]}"; do
     printf "] %s\n" "$file"
 done
 
+# Check symlinks
+MISSING_SYMLINKS=0
+for symlink_spec in "${REQUIRED_SYMLINKS[@]}"; do
+    IFS=':' read -r symlink_path target_path <<< "$symlink_spec"
+    printf "["
+    if [ -L "$symlink_path" ]; then
+        resolved_path=$(readlink -f "$symlink_path")
+        expected_path=$(readlink -f "$target_path")
+        if [ "$resolved_path" = "$expected_path" ]; then
+            printf "$CHECK"
+            status="correct symlink"
+        else
+            printf "$CROSS"
+            status="incorrect symlink target"
+            ((MISSING_FILES++))
+            ((MISSING_SYMLINKS++))
+            MISSING_SYMLINK_PATHS["$symlink_spec"]=1
+        fi
+    else
+        printf "$CROSS"
+        status="missing symlink"
+        ((MISSING_FILES++))
+        ((MISSING_SYMLINKS++))
+        MISSING_SYMLINK_PATHS["$symlink_spec"]=1
+    fi
+    printf "] %s -> %s\n" "$symlink_path" "$target_path"
+done
+
 ###  File Content Checks (Warnings Only)
 WARNINGS=0
 FILE_CONTENT_PASSED=0
@@ -307,6 +343,15 @@ else
 
         for cmd_path in "${!MISSING_COMMAND_PATHS[@]}"; do
             get_install_suggestion "$cmd_path"
+        done
+    fi
+    if [ "$MISSING_SYMLINKS" -gt 0 ]; then
+        printf "\nMissing symlinks and fix suggestions:\n"
+        for symlink_spec in "${!MISSING_SYMLINK_PATHS[@]}"; do
+            IFS=':' read -r symlink_path target_path <<< "$symlink_spec"
+            printf "  # Fix missing symlink %s -> %s\n" "$symlink_path" "$target_path"
+            printf "   sudo rm -rf %s\n" "$symlink_path"
+            printf "   sudo ln -sf %s %s\n" "$target_path" "$symlink_path"
         done
     fi
     if ! $WSLUTIL_OK; then
