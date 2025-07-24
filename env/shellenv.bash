@@ -33,28 +33,36 @@ fi
 # WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
 # - Source ${WIN_ENV}.sh to gain access to these variables
 # - Any directories in these variables will be converted to WSL format
+build_win_env_sh() {
+    ${WIN_COMSPEC} /c "set" 2> /dev/null | win-utf8 | sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > ${WIN_ENV_FILE}.win
+    declare line=""
+    rm -f ${WIN_ENV_FILE}.sh
+    while IFS= read -r line; do
+        #echo "line=\"$line\""
+        declare key="${line%%=*}"
+        declare value="${line#*=}"
+        #echo "key=${key} value=${value}"
+        if [[ "$key" =~ [\(\)\#\.] ]]; then
+            #echo "SPECIAL HANDLING FOR WIN_ENV[$key]=${win_env[$key]}"
+            key="${key//\(/_}"
+            key="${key//\)/_}"
+            key="${key//\./_}"
+            key="${key%_}"
+            #echo "NEW key=${key} value=${value}"
+        fi
+        #WIN_ENV[${key}]="${value}"
+        echo WIN_ENV[\'${key}\']=\""${value}\"" >> ${WIN_ENV_FILE}.sh
+        #WIN_ENV[${key}]="$(printf "%s" "${value}")" || :
+        #echo "WIN_ENV[$key]=${WIN_ENV[${key}]}"
+    done < "${WIN_ENV_FILE}.win"
+}
 declare -g -A -x WIN_ENV
-${WIN_COMSPEC} /c "set" 2> /dev/null | win-utf8 | sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' -e 's#\\#/#g' | sort > ${WIN_ENV_FILE}.win
-declare line=""
-rm -f ${WIN_ENV_FILE}.sh
-while IFS= read -r line; do
-    #echo "line=\"$line\""
-    declare key="${line%%=*}"
-    declare value="${line#*=}"
-    #echo "key=${key} value=${value}"
-    if [[ "$key" =~ [\(\)\#\.] ]]; then
-        #echo "SPECIAL HANDLING FOR WIN_ENV[$key]=${win_env[$key]}"
-        key="${key//\(/_}"
-        key="${key//\)/_}"
-        key="${key//\./_}"
-        key="${key%_}"
-        #echo "NEW key=${key} value=${value}"
-    fi
-    WIN_ENV[${key}]="${value}"
-    echo WIN_ENV[\'${key}\']=\""${value}\"" >> ${WIN_ENV_FILE}.sh
-    #WIN_ENV[${key}]="$(printf "%s" "${value}")" || :
-    #echo "WIN_ENV[$key]=${WIN_ENV[${key}]}"
-done < "${WIN_ENV_FILE}.win"
+
+if [[ ! -f ${WIN_ENV_FILE}.sh ]]; then
+    build_win_env_sh
+fi
+source ${WIN_ENV_FILE}.sh
+nohup build_win_env_sh &> /dev/null &
 
 declare -g -x WIN_APPDATA="${WIN_ENV[APPDATA]}"
 declare -g -x WIN_LOCALAPPDATA="${WIN_ENV[LOCALAPPDATA]}"

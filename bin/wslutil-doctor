@@ -63,6 +63,13 @@ RESET='\033[0m'
 CHECK="${GREEN}✓${RESET}"
 CROSS="${RED}✗${RESET}"
 
+# Return which argument (1 or 2) is largest, or 0 if they are equal
+compare_versions() {
+    if [[ "$1" == "$2" ]]; then return 0; fi
+    local lowest=$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)
+    if [[ "$1" == "$lowest" ]]; then return 2; else return 1; fi
+}
+
 check_command() {
     local action="$1" # check or fix
     local command="$2"
@@ -223,7 +230,7 @@ done
 # Check symlinks
 MISSING_SYMLINKS=0
 for symlink_spec in "${REQUIRED_SYMLINKS[@]}"; do
-    IFS=':' read -r symlink_path target_path <<< "$symlink_spec"
+    IFS=':' read -r symlink_path target_path <<<"$symlink_spec"
     printf "["
     if [ -L "$symlink_path" ]; then
         resolved_path=$(readlink -f "$symlink_path")
@@ -348,7 +355,7 @@ else
     if [ "$MISSING_SYMLINKS" -gt 0 ]; then
         printf "\nMissing symlinks and fix suggestions:\n"
         for symlink_spec in "${!MISSING_SYMLINK_PATHS[@]}"; do
-            IFS=':' read -r symlink_path target_path <<< "$symlink_spec"
+            IFS=':' read -r symlink_path target_path <<<"$symlink_spec"
             printf "  # Fix missing symlink %s -> %s\n" "$symlink_path" "$target_path"
             printf "   sudo rm -rf %s\n" "$symlink_path"
             printf "   sudo ln -sf %s %s\n" "$target_path" "$symlink_path"
