@@ -109,7 +109,6 @@ REQUIRED_FILES=(
 
 # Symlink checks
 REQUIRED_SYMLINKS=(
-    "/tmp/.X11-unix:/mnt/wslg/.X11-unix"
 )
 
 # Track missing symlinks for suggestions
