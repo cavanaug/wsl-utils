@@ -78,32 +78,35 @@ declare -g -x WIN_HOMEPATH="${WIN_ENV[HOMEDRIVE]}${WIN_ENV[HOMEPATH]}"
 # Setup the graphical environment for WSL2 GUI apps
 # - wslg is required for things like clipboard support
 # - Attempt to correct scaling for high DPI displays
-if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then
-    # Ensure WSL2 GUI apps are enabled and set the DISPLAY variable for GUI applications
-    if [[ -z "${DISPLAY}" ]]; then
-        export DISPLAY=":0"
-    fi
-
-    # This sets up the environment for wslg & Wayland so that things like wl-clipboard work properly
-    if [ ! -L "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "$(readlink -f ${XDG_RUNTIME_DIR}/wayland-0)" != "/mnt/wslg/runtime-dir/wayland-0" ]; then
-        ln -s /mnt/wslg/runtime-dir/wayland-0 $XDG_RUNTIME_DIR
-        ln -s /mnt/wslg/runtime-dir/wayland-0.lock $XDG_RUNTIME_DIR
-    fi
-
-    # Ensure the Wayland socket is available for GUI applications
-    if [[ -S "${XDG_RUNTIME_DIR}/wayland-0" ]]; then
-        export WAYLAND_DISPLAY="wayland-0"
-    fi
-
-    # Fix the scaling for high DPI displays in WSL2 GUI apps
-    if command -v wayland-info > /dev/null; then
-        if [[ "$(wayland-info | grep refresh | cut -f2 -d' ')" -ge 3840 ]]; then
-            export GDK_SCALE=${GDK_SCALE:-1.5}
-            export GDK_DPI_SCALE=${GDK_DPI_SCALE:-1.5}
-            export QT_SCALE_FACTOR=${QT_SCALE_FACTOR:-1.5}
-        fi
-    fi
-else
-    # Fallback to X11 if GUI apps are not enabled
-    export DISPLAY=":0"
-fi
+#
+#  WARNING: This technically shouldnt be needed anymore with modern WSL/WSLg
+#
+# if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then
+#     # Ensure WSL2 GUI apps are enabled and set the DISPLAY variable for GUI applications
+#     if [[ -z "${DISPLAY}" ]]; then
+#         export DISPLAY=":0"
+#     fi
+#
+#     # This sets up the environment for wslg & Wayland so that things like wl-clipboard work properly
+#     if [ ! -L "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "$(readlink -f ${XDG_RUNTIME_DIR}/wayland-0)" != "/mnt/wslg/runtime-dir/wayland-0" ]; then
+#         ln -s /mnt/wslg/runtime-dir/wayland-0 $XDG_RUNTIME_DIR
+#         ln -s /mnt/wslg/runtime-dir/wayland-0.lock $XDG_RUNTIME_DIR
+#     fi
+#
+#     # Ensure the Wayland socket is available for GUI applications
+#     if [[ -S "${XDG_RUNTIME_DIR}/wayland-0" ]]; then
+#         export WAYLAND_DISPLAY="wayland-0"
+#     fi
+#
+#     # Fix the scaling for high DPI displays in WSL2 GUI apps
+#     if command -v wayland-info > /dev/null; then
+#         if [[ "$(wayland-info | grep refresh | cut -f2 -d' ')" -ge 3840 ]]; then
+#             export GDK_SCALE=${GDK_SCALE:-1.5}
+#             export GDK_DPI_SCALE=${GDK_DPI_SCALE:-1.5}
+#             export QT_SCALE_FACTOR=${QT_SCALE_FACTOR:-1.5}
+#         fi
+#     fi
+# else
+#     # Fallback to X11 if GUI apps are not enabled
+#     export DISPLAY=":0"
+# fi
