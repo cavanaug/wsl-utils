@@ -16,6 +16,7 @@ winexe:
     - tasklist.exe
     - "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
     - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"
+    - wt.exe
     ########################################
     # Windows ADMIN CLI Extras (Dont work in my corporate environment :-( )
     ########################################

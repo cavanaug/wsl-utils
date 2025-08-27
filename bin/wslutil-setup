@@ -281,8 +281,26 @@ create_direct_symlink() {
         fi
 
         if [[ -z "$win_executable" ]]; then
-            log_warning "Windows executable not found in cache: $executable"
-            return 1
+            log_info "Executable not found in cache, trying PowerShell Get-Command fallback: $executable"
+            
+            # Fallback: Use PowerShell Get-Command to locate the executable
+            local ps_result
+            ps_result=$(/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "
+                try { 
+                    \$cmd = Get-Command '$executable' -ErrorAction Stop
+                    \$cmd.Source 
+                } catch { 
+                    Write-Output '' 
+                }
+            " | sed 's|^\([A-Z]\):|/mnt/\L\1|g; s|\\|/|g; s|\r$||g' | grep -v '^$')
+            
+            if [[ -n "$ps_result" ]]; then
+                win_executable="$ps_result"
+                log_info "Found via PowerShell Get-Command: $win_executable"
+            else
+                log_warning "Windows executable not found via cache or PowerShell: $executable"
+                return 1
+            fi
         fi
     fi
 
@@ -295,9 +313,16 @@ create_direct_symlink() {
     fi
 
     # Check if symlink already exists and points to the correct target
-    if [[ -L "$target_link" && "$(readlink "$target_link")" == "$win_executable" ]]; then
-        log_info "Symlink already exists: $symlink_name -> $win_executable (skipping)"
-        return 0
+    if [[ -L "$target_link" ]]; then
+        local current_target
+        current_target=$(readlink "$target_link")
+        if [[ "$current_target" == "$win_executable" ]]; then
+            log_info "Symlink already exists: $symlink_name -> $win_executable (skipping)"
+            return 0
+        else
+            log_info "Symlink exists but points to different target: $current_target"
+            log_info "Will replace with newly discovered target: $win_executable"
+        fi
     fi
 
     log_info "Creating direct symlink: $symlink_name -> $win_executable"
@@ -322,6 +347,38 @@ create_direct_symlink() {
     fi
 }
 
+# Function to get all Windows executables on PATH in Linux path format sorted by PATH order
+get_windows_path_executables() {
+    /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command '
+    $pathDirs = $env:PATH -split ";" | Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.TrimEnd("\") }
+    $pathOrder = @{}
+    for ($i = 0; $i -lt $pathDirs.Count; $i++) {
+        $pathOrder[$pathDirs[$i]] = $i
+    }
+    $allExes = @()
+    foreach ($dir in $pathDirs) {
+        if (Test-Path $dir) {
+            try {
+                $extensions = @("*.exe", "*.com", "*.bat", "*.cmd", "*.msc")
+                foreach ($ext in $extensions) {
+                    $exes = Get-ChildItem -Path "$dir" -File -Filter $ext -ErrorAction SilentlyContinue
+                    foreach ($exe in $exes) {
+                        $allExes += [PSCustomObject]@{ 
+                            Path = $exe.FullName
+                            Order = $pathOrder[$dir]
+                        }
+                    }
+                }
+            } catch {
+                # Skip directories we cannot access
+                continue
+            }
+        }
+    }
+    $allExes | Sort-Object Order, Path | ForEach-Object { $_.Path }
+    ' | sed 's|^\([A-Z]\):|/mnt/\L\1|g; s|\\|/|g; s|\r$||g'
+}
+
 # Function to update the Windows programs cache
 update_programs_cache() {
     local programs_cache="$1"
@@ -332,28 +389,12 @@ update_programs_cache() {
     # Remove old cache if it exists
     [[ -f "$programs_cache" ]] && rm -f "$programs_cache"
     
-    # Set default paths if not already set
-    local WIN_WINDIR="${WIN_WINDIR:-/mnt/c/Windows}"
-    local WIN_PROGRAMFILES="${WIN_PROGRAMFILES:-/mnt/c/Program Files}"
-    local WIN_PROGRAMFILES_X86="${WIN_PROGRAMFILES_X86:-/mnt/c/Program Files (x86)}"
-    local WIN_USERPROFILE="${WIN_USERPROFILE:-/mnt/c/Users/$(whoami)}"
+    log_info "Building executable cache using Windows PATH..."
     
-    # Scan directories for .exe files (same as programs.sh)
-    local scan_dirs=(
-        "$WIN_WINDIR"
-        "$WIN_PROGRAMFILES"
-        "$WIN_PROGRAMFILES_X86"
-        "$WIN_USERPROFILE/AppData/Local/Programs/"
-    )
+    # Use PowerShell-based method to get all executables from Windows PATH
+    get_windows_path_executables > "$programs_cache"
     
-    for dir in "${scan_dirs[@]}"; do
-        if [[ -d "$dir" ]]; then
-            log_info "Scanning for executables in: $dir"
-            find "$dir" -type f -iname "*.exe" 2>/dev/null >> "$programs_cache" || true
-        fi
-    done
-    
-    log_info "Windows executable cache updated: $programs_cache"
+    log_info "Windows executable cache updated using PATH: $programs_cache ($(wc -l < "$programs_cache") executables)"
 }
 
 # Function to process configuration files from a given directory

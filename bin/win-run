@@ -358,7 +358,7 @@ fi
 
 set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
-    "$POWERSHELL_EXE" -Command "& \"${CMD}\" ${CMDARGS[@]}"
+    "$POWERSHELL_EXE" -NoProfile -Command "& \"${CMD}\" ${CMDARGS[@]}"
 else
-    "$POWERSHELL_EXE" -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | ensure_utf8
+    "$POWERSHELL_EXE" -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | ensure_utf8
 fi
