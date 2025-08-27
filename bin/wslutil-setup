@@ -52,7 +52,7 @@ while [[ $# -gt 0 ]]; do
         DRY_RUN=1
         shift
         ;;
-    -c|--config)
+    -c | --config)
         if [[ -z "$2" ]]; then
             echo "Error: -c/--config option requires a config file argument" >&2
             show_help
@@ -86,7 +86,7 @@ NC='\033[0m' # No Color
 
 # Logging functions
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "   ${BLUE}[INFO]${NC} $1"
 }
 
 log_success() {
@@ -98,7 +98,7 @@ log_warning() {
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    echo -e "  ${RED}[ERROR]${NC} $1"
 }
 
 # Check if running in dry-run mode
@@ -271,7 +271,7 @@ create_direct_symlink() {
         win_executable="$executable"
         # Extract basename for symlink name
         symlink_name=$(basename "$executable")
-        
+
         # For full paths, check if the file exists before proceeding
         if [[ ! -f "$win_executable" ]]; then
             log_info "Skipping missing executable: $win_executable"
@@ -280,7 +280,7 @@ create_direct_symlink() {
     else
         # Just executable name - search in cache
         symlink_name="$executable"
-        
+
         # Use the same cache approach as programs.sh
         local XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
         local programs_cache="$XDG_CACHE_HOME/wslutil/programs"
@@ -299,18 +299,18 @@ create_direct_symlink() {
 
         if [[ -z "$win_executable" ]]; then
             log_info "Executable not found in cache, trying PowerShell Get-Command fallback: $executable"
-            
+
             # Fallback: Use PowerShell Get-Command to locate the executable
             local ps_result
             ps_result=$(/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "
-                try { 
+                try {
                     \$cmd = Get-Command '$executable' -ErrorAction Stop
-                    \$cmd.Source 
-                } catch { 
-                    Write-Output '' 
+                    \$cmd.Source
+                } catch {
+                    Write-Output ''
                 }
             " | sed 's|^\([A-Z]\):|/mnt/\L\1|g; s|\\|/|g; s|\r$||g' | grep -v '^$')
-            
+
             if [[ -n "$ps_result" ]]; then
                 win_executable="$ps_result"
                 log_info "Found via PowerShell Get-Command: $win_executable"
@@ -380,7 +380,7 @@ get_windows_path_executables() {
                 foreach ($ext in $extensions) {
                     $exes = Get-ChildItem -Path "$dir" -File -Filter $ext -ErrorAction SilentlyContinue
                     foreach ($exe in $exes) {
-                        $allExes += [PSCustomObject]@{ 
+                        $allExes += [PSCustomObject]@{
                             Path = $exe.FullName
                             Order = $pathOrder[$dir]
                         }
@@ -399,19 +399,19 @@ get_windows_path_executables() {
 # Function to update the Windows programs cache
 update_programs_cache() {
     local programs_cache="$1"
-    
+
     # Create cache directory
     mkdir -p "$(dirname "$programs_cache")"
-    
+
     # Remove old cache if it exists
     [[ -f "$programs_cache" ]] && rm -f "$programs_cache"
-    
+
     log_info "Building executable cache using Windows PATH..."
-    
+
     # Use PowerShell-based method to get all executables from Windows PATH
-    get_windows_path_executables > "$programs_cache"
-    
-    log_info "Windows executable cache updated using PATH: $programs_cache ($(wc -l < "$programs_cache") executables)"
+    get_windows_path_executables >"$programs_cache"
+
+    log_info "Windows executable cache updated using PATH: $programs_cache ($(wc -l <"$programs_cache") executables)"
 }
 
 # Function to process configuration files from a given directory
