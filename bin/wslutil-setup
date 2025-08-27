@@ -26,13 +26,16 @@ This command performs the following configuration merging:
 - wslgconfig: Merges settings into \${WIN_USERPROFILE}/.wslgconfig
 
 Options:
-  --dry-run    Show what would be done without making changes
-  --help       Show this help message and exit
+  --dry-run         Show what would be done without making changes
+  -c, --config FILE Use custom config file instead of default wslutil.yml
+  --help            Show this help message and exit
 
 Examples:
-  wslutil-setup                 # Perform configuration setup
-  wslutil-setup --dry-run       # Preview changes without applying
-  wslutil-setup --help          # Show this help message
+  wslutil-setup                          # Perform configuration setup
+  wslutil-setup --dry-run                # Preview changes without applying
+  wslutil-setup -c /path/to/my-config.yml      # Use custom config file
+  wslutil-setup --config ./project-config.yml # Use custom config file
+  wslutil-setup --help                   # Show this help message
 
 Note: The crudini utility is required for configuration file merging.
       Run 'wslutil doctor' to check for all required dependencies.
@@ -42,11 +45,25 @@ EOF
 
 # Parse command line arguments
 DRY_RUN=0
+CUSTOM_CONFIG_FILE=""
 while [[ $# -gt 0 ]]; do
     case $1 in
     --dry-run)
         DRY_RUN=1
         shift
+        ;;
+    -c|--config)
+        if [[ -z "$2" ]]; then
+            echo "Error: -c/--config option requires a config file argument" >&2
+            show_help
+            exit 1
+        fi
+        if [[ ! -f "$2" ]]; then
+            echo "Error: Config file '$2' does not exist" >&2
+            exit 1
+        fi
+        CUSTOM_CONFIG_FILE="$2"
+        shift 2
         ;;
     --help)
         show_help
@@ -445,8 +462,14 @@ main() {
     process_config_directory "$CONFIG_DIR" "System Configuration"
 
     # Phase 2: Process user-specific configuration files
-    local user_config_dir="$HOME/.config/wslutil"
-    process_config_directory "$user_config_dir" "User Configuration"
+    if [[ -n "$CUSTOM_CONFIG_FILE" ]]; then
+        log_info "=== Phase: Custom Configuration ==="
+        log_info "Processing custom config file: $CUSTOM_CONFIG_FILE"
+        process_winutil_config "$CUSTOM_CONFIG_FILE"
+    else
+        local user_config_dir="$HOME/.config/wslutil"
+        process_config_directory "$user_config_dir" "User Configuration"
+    fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
         log_info "Dry-run completed - no changes were made"

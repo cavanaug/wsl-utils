@@ -12,12 +12,13 @@ This document outlines the future plans and direction for wslutil. This is a liv
 
 * .wslconfig file settings
 * .wslgconfig file settings
-* Config files for symlink creation in WSLUTIL bin folder
 * update to show version number changes
 
 ## Backlog
 
 * Add windows font directory to user font directory and run of font update
+* Register win-browser with xdg as browser handler??  (Is this needed anymore??)
+* Add support via cmdline for adding direct and win-run in user config file??
 * Configure via dconf default mono font based on extracting default font from windows terminal
 * Additional self automation for DPI scaling for high DPI monitors (check for battery and assume smaller monitor)
 * Non Debian based distros

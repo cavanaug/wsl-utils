@@ -11,10 +11,10 @@ This is `wsl-utils`, a collection of command-line utilities that simplify intero
 ### Core Components
 
 - **`wslutil`** (bin/wslutil): Main dispatcher script that handles subcommands and discovers external `wslutil-*` scripts
-- **Subcommands**: Individual `wslutil-*` scripts (e.g., `wslutil-doctor`) that implement specific functionality
+- **Subcommands**: Individual `wslutil-*` scripts (e.g., `wslutil-doctor`, `wslutil-setup`) that implement specific functionality
 - **Windows Integration Helpers**: `win-*` scripts that provide direct integration with Windows features
 - **Environment Setup**: Shell environment configuration via `env/shellenv.*` files
-- **Configuration**: YAML-based configuration in `conf.yml` for Windows executable shimming
+- **Configuration**: YAML-based configuration in `conf.yml` for Windows executable symlink creation
 
 ### Key Scripts
 
@@ -28,12 +28,35 @@ This is `wsl-utils`, a collection of command-line utilities that simplify intero
 
 ### Environment Variables
 
-The system relies on several environment variables set by `wslutil shellenv`:
-- `WSLUTIL_DIR`: Installation directory
+**Core System Variables:**
+- `WSLUTIL_DIR`: Installation directory (auto-detected from script location)
+- `WSL_INTEROP`: WSL interop socket path (default: `/run/WSL/1_interop`)
+
+**Windows Environment Variables (set by `wslutil shellenv`):**
 - `WIN_USERPROFILE`: Windows user profile path (converted to WSL format)
-- `WIN_WINDIR`: Windows directory path (converted to WSL format)
-- `WSL_INTEROP`: WSL interop socket path
-- `WIN_ENV[]`: Associative array of Windows environment variables
+- `WIN_WINDIR`: Windows directory path (default: `/mnt/c/Windows`)
+- `WIN_PROGRAMFILES`: Program Files directory (converted to WSL format)
+- `WIN_PROGRAMFILES_X86`: Program Files (x86) directory
+- `WIN_LOCALAPPDATA`: Local AppData directory
+- `WIN_APPDATA`: Roaming AppData directory  
+- `WIN_COMPUTERNAME`: Windows computer name
+- `WIN_USERNAME`: Windows username
+- `WIN_USERDOMAIN`: Windows user domain
+- `WIN_HOMEPATH`: Combined HOMEDRIVE + HOMEPATH from Windows
+- `WIN_ENV[]`: Associative array containing all Windows environment variables
+  
+  **⚠️ WARNING**: WIN_ENV is a Bash associative array with important limitations:
+  - Not exported to subprocesses or scripts
+  - Only available in current shell after `eval "$(wslutil shellenv)"`  
+  - Use individual WIN_* variables for script compatibility
+
+**Configuration Variables:**
+- `XDG_CONFIG_HOME`: Config directory override (default: `~/.config`)
+- `WSLUTIL_DEBUG`: When set, enables detailed logging to `~/.local/state/wslutil/*.log`
+
+**Development Variables:**
+- `BATS_TMPDIR`: Temporary directory for BATS tests (default: `/tmp`)
+- `TMPDIR`: System temporary directory override
 
 ## Common Commands
 
@@ -68,7 +91,7 @@ win-browser <url>            # Open URL in Windows default browser
 The `win-run` script automatically converts WSL paths to Windows format for any arguments that are existing files or directories using `wslpath -w`.
 
 ### Configuration Format
-The `conf.yml` file defines Windows executables to be shimmed, categorized as:
+The `conf.yml` file defines Windows executables for symlink creation by `wslutil setup`, categorized as:
 - Direct links (no argument processing)
 - Shims (processed through `win-run` for path conversion)
 
@@ -130,3 +153,14 @@ All PowerShell calls use `-NoProfile` flag for:
 - **Path Conversion**: Automatic WSL-to-Windows path conversion for files/directories
 - **UTF-8 Processing**: Intelligent encoding detection and conversion (UTF-16LE to UTF-8)
 - **Environment Variables**: Full expansion support in alias configurations
+
+### User Configuration System
+The system supports user-specific configurations in `~/.config/wslutil/`:
+
+- **wslutil.yml**: User-specific Windows executable symlinks (winrun/winexe entries)
+- **win-run.yml**: User-specific aliases and configurations
+- **wsl.conf**: User WSL settings (merged into /etc/wsl.conf)
+- **wslconfig**: User WSL2 settings (merged into Windows user profile)
+- **wslgconfig**: User WSLg settings (merged into Windows user profile)
+
+Configuration hierarchy: System configs processed first, then user configs override defaults.

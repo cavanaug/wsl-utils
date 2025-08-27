@@ -25,25 +25,6 @@ shellenv_command() {
     fi
 }
 
-# Function to handle 'register' subcommand
-register_command() {
-    echo "Registering WSL utility..."
-    # Add argument processing for 'register' here
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-        --name)
-            shift
-            echo "Registering with name: $1"
-            ;;
-        *)
-            echo "Unknown option for register: $1" >/dev/null
-            exit 1
-            ;;
-        esac
-        shift
-    done
-}
-
 # Function to handle 'upgrade' subcommand
 upgrade_command() {
     echo "Updating WSL utility..."
@@ -79,15 +60,6 @@ shellenv)
     shift
     shellenv_command "$@"
     ;;
-register)
-    if [[ "$2" == "--help" ]]; then
-        echo "Usage: $(basename $0) register --name <name>"
-        echo "  --name     Specify the name for registration"
-        exit 0
-    fi
-    shift
-    register_command "$@"
-    ;;
 upgrade)
     if [[ "$2" == "--help" ]]; then
         echo "Usage: $(basename $0) upgrade [--check]"
@@ -99,14 +71,13 @@ upgrade)
     exit 0 # Exit after upgrade command regardless of WSL check
     ;;
 --help)
-    echo "Usage: $(basename $0) {shellenv|register|upgrade} [options]"
+    echo "Usage: $(basename $0) <subcommand> [options]"
     echo "Subcommands:"
     echo "  doctor     Run a health check on the wslutil environment"
     echo "  shellenv   Setup the shell environment (eval the output)"
-    echo "  shim       Create/Update windows command shims in the wsutil bin directory"
     echo "  setup      Setup & Configure system environment for wslutil (utilizes sudo)"
     echo "  upgrade    Upgrade the wslutil in place"
-    if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|shellenv|shim|setup|upgrade)')"; then
+    if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|shellenv|setup|upgrade)')"; then
         printf "\nExtra Subcommands:\n"
         for i in $extras; do
             echo "  $i (as wslutil-$i)"
@@ -136,7 +107,7 @@ upgrade)
         exit $?
     else
         # Command not found in either location
-        echo "Usage: $(basename $0) [options] {doctor|shellenv|shim|setup|upgrade}"
+        echo "Usage: $(basename $0) [options] {doctor|shellenv|setup|upgrade}"
         exit 1
     fi
     ;;
