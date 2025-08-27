@@ -434,11 +434,31 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
             
             # Compare versions
             if [[ "$local_hash" == "$remote_hash" ]]; then
-                printf "[$CHECK] Version status: up to date\n"
+                if [[ -n "$local_changes" ]]; then
+                    printf "[${YELLOW}!${RESET}] Version status: up to date${local_changes}\n"
+                else
+                    printf "[$CHECK] Version status: up to date\n"
+                fi
             else
-                printf "[$CROSS] Version status: update available\n"
-                printf "    # Update to latest version:\n"
-                printf "    wslutil upgrade\n"
+                # Check if local is ahead, behind, or diverged
+                local_full_hash=$(git rev-parse HEAD 2>/dev/null)
+                remote_full_hash=$(git rev-parse origin/main 2>/dev/null)
+                
+                # Check if local commit is ancestor of remote (behind)
+                if git merge-base --is-ancestor "$local_full_hash" "$remote_full_hash" 2>/dev/null; then
+                    printf "[$CROSS] Version status: behind remote (update available)\n"
+                    printf "    # Update to latest version:\n"
+                    printf "    wslutil upgrade\n"
+                # Check if remote commit is ancestor of local (ahead)
+                elif git merge-base --is-ancestor "$remote_full_hash" "$local_full_hash" 2>/dev/null; then
+                    printf "[${YELLOW}!${RESET}] Version status: ahead of remote (local development)\n"
+                else
+                    # Branches have diverged
+                    printf "[${YELLOW}!${RESET}] Version status: diverged from remote (local changes)\n"
+                    if [[ -z "$local_changes" ]]; then
+                        printf "    # Note: Local commits differ from remote\n"
+                    fi
+                fi
             fi
         else
             printf "[$CROSS] Remote version: no cached remote info (run 'git fetch' manually)\n"
