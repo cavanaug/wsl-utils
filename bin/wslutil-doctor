@@ -107,6 +107,9 @@ REQUIRED_FILES=(
     "/usr/lib/binfmt.d/WSLInterop.conf"
 )
 
+# Windows profile files (constructed dynamically)
+WINDOWS_FILES=()
+
 # Symlink checks
 REQUIRED_SYMLINKS=(
 )
@@ -130,6 +133,30 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
 else
     printf "[$CROSS] %s\n" "WSL environment"
     exit
+fi
+
+# Check WSL version (requires 2.5.8.0 or higher)
+wsl_version=$(wslinfo --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+if [[ -n "$wsl_version" ]]; then
+    # Parse version numbers for comparison
+    IFS='.' read -ra version_parts <<< "$wsl_version"
+    major=${version_parts[0]:-0}
+    minor=${version_parts[1]:-0}
+    build=${version_parts[2]:-0}
+    revision=${version_parts[3]:-0}
+    
+    # Check if version is >= 2.5.8.0
+    if (( major > 2 || (major == 2 && minor > 5) || (major == 2 && minor == 5 && build >= 8) )); then
+        printf "[$CHECK] WSL version: %s\n" "$wsl_version"
+    else
+        printf "[$CROSS] WSL version: %s (requires 2.5.8.0 or higher)\n" "$wsl_version"
+        printf "    # Update WSL to latest version:\n"
+        printf "    wsl.exe --update\n"
+    fi
+else
+    printf "[$CROSS] WSL version: could not determine (wslinfo command not available)\n"
+    printf "    # Update WSL to latest version:\n"
+    printf "    wsl.exe --update\n"
 fi
 
 # Check for OS package manager search utility
@@ -254,6 +281,32 @@ for symlink_spec in "${REQUIRED_SYMLINKS[@]}"; do
     printf "] %s -> %s\n" "$symlink_path" "$target_path"
 done
 
+###  Windows Configuration Files
+# Build Windows files array if WIN_USERPROFILE is available
+if [[ -n "$WIN_USERPROFILE" ]]; then
+    WINDOWS_FILES=(
+        "$WIN_USERPROFILE/.wslconfig"
+        "$WIN_USERPROFILE/.wslgconfig"
+    )
+    
+    printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Windows Config Files"
+    for file in "${WINDOWS_FILES[@]}"; do
+        printf "["
+        if [ -e "$file" ]; then
+            printf "$CHECK"
+            status="present"
+        else
+            printf "$CROSS"
+            status="missing"
+            ((MISSING_FILES++))
+        fi
+        printf "] %s\n" "$file"
+    done
+else
+    printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Windows Config Files"
+    printf "[$CROSS] Skipped - WIN_USERPROFILE not available\n"
+fi
+
 ###  File Content Checks (Warnings Only)
 WARNINGS=0
 FILE_CONTENT_PASSED=0
@@ -279,6 +332,50 @@ if command -v crudini >/dev/null 2>&1; then
         printf "[${CROSS}] /etc/wsl.conf not found — skipping content checks\n"
         # No need to increment WARNINGS here, as missing file is already an error
     fi
+    
+    # Check Windows configuration files content
+    if [[ -n "$WIN_USERPROFILE" ]]; then
+        # Check .wslconfig sections
+        if [ -e "$WIN_USERPROFILE/.wslconfig" ]; then
+            for section in wsl2 experimental; do
+                printf "["
+                if crudini --get "$WIN_USERPROFILE/.wslconfig" "$section" &>/dev/null; then
+                    printf "$CHECK"
+                    status="found"
+                    ((FILE_CONTENT_PASSED++))
+                else
+                    printf "$CROSS"
+                    status="missing (warn)"
+                    ((WARNINGS++))
+                fi
+                printf "] [.wslconfig] %s\n" "section [$section]"
+            done
+        else
+            printf "[${CROSS}] .wslconfig not found — skipping content checks\n"
+        fi
+        
+        # Check .wslgconfig sections
+        if [ -e "$WIN_USERPROFILE/.wslgconfig" ]; then
+            for section in system-distro-env; do
+                printf "["
+                if crudini --get "$WIN_USERPROFILE/.wslgconfig" "$section" &>/dev/null; then
+                    printf "$CHECK"
+                    status="found"
+                    ((FILE_CONTENT_PASSED++))
+                else
+                    printf "$CROSS"
+                    status="missing (warn)"
+                    ((WARNINGS++))
+                fi
+                printf "] [.wslgconfig] %s\n" "section [$section]"
+            done
+        else
+            printf "[${CROSS}] .wslgconfig not found — skipping content checks\n"
+        fi
+    else
+        printf "[${CROSS}] WIN_USERPROFILE not available — skipping Windows file content checks\n"
+    fi
+    
     printf "\n"
 fi
 # End of crudini check block
@@ -376,7 +473,7 @@ else
 fi
 
 ###  Version Check
-printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Version Information"
+printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "WSL-Utils Version Info"
 
 # Get local version
 WSLUTIL_DIR="$(dirname $(dirname "$0"))"
