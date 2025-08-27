@@ -155,55 +155,6 @@ else
     printf "    #    Pull requests welcomed...\n"
 fi
 
-###  Version Check
-printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Version Information"
-
-# Get local version
-WSLUTIL_DIR="$(dirname $(dirname "$0"))"
-if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
-    cd "${WSLUTIL_DIR}"
-    local_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
-    local_hash=$(git log -1 --format="%h" 2>/dev/null)
-    if [[ -n "$local_date" && -n "$local_hash" ]]; then
-        local_version="${local_date} (${local_hash})"
-        printf "[$CHECK] Local version: %s\n" "$local_version"
-        
-        # Check if we can reach remote origin
-        if git ls-remote --heads origin main >/dev/null 2>&1; then
-            # Get remote version
-            remote_hash=$(git ls-remote --heads origin main 2>/dev/null | cut -f1 | cut -c1-7)
-            if [[ -n "$remote_hash" ]]; then
-                # Get the date of the remote commit (requires fetching)
-                git fetch origin main --quiet 2>/dev/null
-                remote_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" origin/main 2>/dev/null)
-                if [[ -n "$remote_date" ]]; then
-                    remote_version="${remote_date} (${remote_hash})"
-                    printf "[$CHECK] Remote version: %s\n" "$remote_version"
-                    
-                    # Compare versions
-                    if [[ "$local_hash" == "$remote_hash" ]]; then
-                        printf "[$CHECK] Version status: up to date\n"
-                    else
-                        printf "[$CROSS] Version status: update available\n"
-                        printf "    # Update to latest version:\n"
-                        printf "    wslutil upgrade\n"
-                    fi
-                else
-                    printf "[$CROSS] Remote version: could not determine date\n"
-                fi
-            else
-                printf "[$CROSS] Remote version: could not determine hash\n"
-            fi
-        else
-            printf "[$CROSS] Remote version: cannot reach origin (network/auth issue)\n"
-        fi
-    else
-        printf "[$CROSS] Local version: could not determine from git\n"
-    fi
-else
-    printf "[$CROSS] Version check: not a git repository\n"
-fi
-
 ###  Required Commands
 printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Required Commands"
 MISSING_COMMANDS=0
@@ -423,3 +374,80 @@ else
     fi
     printf "\n"
 fi
+
+###  Version Check
+printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Version Information"
+
+# Get local version
+WSLUTIL_DIR="$(dirname $(dirname "$0"))"
+if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
+    cd "${WSLUTIL_DIR}"
+    local_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
+    local_hash=$(git log -1 --format="%h" 2>/dev/null)
+    
+    # Check for local changes
+    local_changes=""
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        local_changes=" (modified)"
+    elif [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+        local_changes=" (untracked files)"
+    fi
+    
+    if [[ -n "$local_date" && -n "$local_hash" ]]; then
+        local_version="${local_date} (${local_hash})${local_changes}"
+        printf "[$CHECK] Local version: %s\n" "$local_version"
+        
+        # Check if we need to fetch (if last fetch was > 1 hour ago)
+        need_fetch=false
+        if [[ -f ".git/FETCH_HEAD" ]]; then
+            last_fetch=$(stat -c %Y .git/FETCH_HEAD 2>/dev/null)
+            current_time=$(date +%s)
+            if [[ -n "$last_fetch" ]] && [[ $((current_time - last_fetch)) -gt 3600 ]]; then
+                need_fetch=true
+            fi
+        else
+            # No previous fetch, need to fetch
+            need_fetch=true
+        fi
+        
+        # Perform fetch if needed
+        if [[ "$need_fetch" == "true" ]]; then
+            if timeout 10 git fetch origin main --quiet 2>/dev/null; then
+                printf "[$CHECK] Remote info refreshed\n"
+            else
+                printf "[$CROSS] Remote fetch failed or timed out\n"
+            fi
+        fi
+        
+        # Get remote version from local refs (fast, no network)
+        if git rev-parse origin/main >/dev/null 2>&1; then
+            remote_hash_full=$(git rev-parse origin/main 2>/dev/null)
+            remote_hash=$(echo "$remote_hash_full" | cut -c1-7)
+            remote_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" origin/main 2>/dev/null)
+            
+            if [[ -n "$remote_date" ]]; then
+                remote_version="${remote_date} (${remote_hash})"
+                printf "[$CHECK] Remote version: %s\n" "$remote_version"
+            else
+                printf "[$CHECK] Remote hash: %s\n" "$remote_hash"
+            fi
+            
+            # Compare versions
+            if [[ "$local_hash" == "$remote_hash" ]]; then
+                printf "[$CHECK] Version status: up to date\n"
+            else
+                printf "[$CROSS] Version status: update available\n"
+                printf "    # Update to latest version:\n"
+                printf "    wslutil upgrade\n"
+            fi
+        else
+            printf "[$CROSS] Remote version: no cached remote info (run 'git fetch' manually)\n"
+        fi
+    else
+        printf "[$CROSS] Local version: could not determine from git\n"
+    fi
+else
+    printf "[$CROSS] Version check: not a git repository\n"
+fi
+
+printf "\n"
