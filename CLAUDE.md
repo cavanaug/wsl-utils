@@ -77,3 +77,56 @@ Custom subcommands can be added by creating executable `wslutil-<name>` scripts 
 
 ### Shell Environment Detection
 The system detects the current shell via `$SHELL` and loads the appropriate `env/shellenv.<shell>` file.
+
+## Testing
+
+The project uses BATS (Bash Automated Testing System) for comprehensive testing.
+
+### Running Tests
+```bash
+# Run all tests
+./tests/run_tests.sh
+
+# Run specific test file
+./tests/run_tests.sh test_option_parsing.bats
+
+# Run with verbose output
+./tests/run_tests.sh -v
+```
+
+### Test Structure
+- **test_option_parsing.bats**: Command-line option parsing tests
+- **test_alias_resolution.bats**: Alias system and config hierarchy tests
+- **test_path_conversion.bats**: Path conversion logic tests
+- **test_integration.bats**: End-to-end functionality tests
+- **test_wslutil_setup.bats**: Setup command and symlink creation tests
+
+### Prerequisites
+- BATS: `sudo apt install bats` or `brew install bats-core`
+- yq: `sudo apt install yq` or `brew install yq`
+
+## Configuration System Architecture
+
+### wslutil-setup Symlink Management
+The `wslutil-setup` command processes `config/wslutil.yml` to create Windows executable symlinks:
+
+**winexe entries**: Direct symlinks to Windows executables for performance
+**winrun entries**: Symlinks to `win-run` script for path conversion and UTF-8 processing
+
+The setup process:
+1. Builds Windows executable cache from PATH using PowerShell
+2. Falls back to `Get-Command` for executables not in PATH
+3. Handles Windows line endings and path conversion automatically
+4. Supports environment variable expansion (`${WIN_PROGRAMFILES}`, etc.)
+
+### PowerShell Integration
+All PowerShell calls use `-NoProfile` flag for:
+- Faster execution (no profile loading)
+- Consistent behavior across environments  
+- Predictable scripting environment
+
+### win-run Architecture
+- **Alias Resolution**: YAML-based config hierarchy (global → user → custom)
+- **Path Conversion**: Automatic WSL-to-Windows path conversion for files/directories
+- **UTF-8 Processing**: Intelligent encoding detection and conversion (UTF-16LE to UTF-8)
+- **Environment Variables**: Full expansion support in alias configurations
