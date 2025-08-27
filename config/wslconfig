@@ -1,19 +1,17 @@
 [wsl2]
+guiApplications=true
 memory=16G
-#autoMemoryReclaim=gradual
-#sparseVhd=true
 firewall=false
 dnsTunneling=true
 autoProxy=false
-#vmSwitch=Bridge
-#dhcp=false
-#ipv6=true
-
+;autoMemoryReclaim=gradual
+;sparseVhd=true
+;vmSwitch=Bridge
+;dhcp=false
+;ipv6=true
 [experimental]
 autoMemoryReclaim=gradual
-sparseVhd=true
-#networkingMode=mirrored
-# Thse are nolonger experimental
-#firewall=false
-#dnsTunneling=true
-#autoProxy=false
+sparseVhd=false
+;networkingMode=mirrored
+;
+; vim: filetype=dosini :

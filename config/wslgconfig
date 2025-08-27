@@ -1,3 +1,8 @@
+; See https://github.com/microsoft/wslg/issues/23#issuecomment-3156863611
 [system-distro-env]
+WESTON_RDP_HI_DPI_SCALING=true
 WESTON_RDP_DISABLE_FRACTIONAL_HI_DPI_SCALING=false
-WESTON_RDP_FRACTIONAL_HI_DPI_SCALING=true
+WESTON_RDP_FRACTIONAL_HI_DPI_SCALING=false
+WESTON_RDP_FRACTIONAL_HI_DPI_SCALING_ROUNDUP=true
+;
+; vim: filetype=dosini :
