@@ -337,7 +337,7 @@ if command -v crudini >/dev/null 2>&1; then
     if [[ -n "$WIN_USERPROFILE" ]]; then
         # Check .wslconfig sections
         if [ -e "$WIN_USERPROFILE/.wslconfig" ]; then
-            for section in wsl2 experimental; do
+            for section in wsl2; do
                 printf "["
                 if crudini --get "$WIN_USERPROFILE/.wslconfig" "$section" &>/dev/null; then
                     printf "$CHECK"
