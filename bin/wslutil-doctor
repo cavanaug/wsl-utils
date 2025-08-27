@@ -361,15 +361,15 @@ else
         done
     fi
     if ! $WSLUTIL_OK; then
-        printf "\n${RED}Tip:${RESET} 'wslutil' is not in your PATH. Make sure it's installed and added to ~/.local/bin or another directory in your PATH.\n"
+        printf "\n  # ${RED}Tip:${RESET} 'wslutil' is not in your PATH. Make sure it's installed and added to ~/.local/bin or another directory in your PATH.\n"
     fi
     if ! $WIN_USERPROFILE_OK || ! $WIN_WINDIR_OK; then
-        printf "\n${RED}Tip:${RESET} Windows environment variables (WIN_USERPROFILE, WIN_WINDIR) missing. Run:\n"
+        printf "\n  # ${RED}Tip:${RESET} Windows environment variables (WIN_USERPROFILE, WIN_WINDIR) missing. Run:\n"
         printf "  ${GREEN}eval \"\$(wslutil shellenv)\"${RESET}\n"
         printf "  and add it to your shell's startup file (e.g., ~/.bashrc, ~/.zshrc).\n"
     fi
     if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
-        printf "\n${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
+        printf "\n  # ${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
         printf "  ${GREEN}wslutil setup${RESET}\n"
     fi
     printf "\n"
@@ -384,7 +384,7 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
     cd "${WSLUTIL_DIR}"
     local_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
     local_hash=$(git log -1 --format="%h" 2>/dev/null)
-    
+
     # Check for local changes
     local_changes=""
     if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
@@ -392,11 +392,11 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
     elif [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
         local_changes=" (untracked files)"
     fi
-    
+
     if [[ -n "$local_date" && -n "$local_hash" ]]; then
         local_version="${local_date} (${local_hash})${local_changes}"
         printf "[$CHECK] Local version: %s\n" "$local_version"
-        
+
         # Check if we need to fetch (if last fetch was > 1 hour ago)
         need_fetch=false
         if [[ -f ".git/FETCH_HEAD" ]]; then
@@ -409,7 +409,7 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
             # No previous fetch, need to fetch
             need_fetch=true
         fi
-        
+
         # Perform fetch if needed
         if [[ "$need_fetch" == "true" ]]; then
             if timeout 10 git fetch origin main --quiet 2>/dev/null; then
@@ -418,20 +418,20 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
                 printf "[$CROSS] Remote fetch failed or timed out\n"
             fi
         fi
-        
+
         # Get remote version from local refs (fast, no network)
         if git rev-parse origin/main >/dev/null 2>&1; then
             remote_hash_full=$(git rev-parse origin/main 2>/dev/null)
             remote_hash=$(echo "$remote_hash_full" | cut -c1-7)
             remote_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" origin/main 2>/dev/null)
-            
+
             if [[ -n "$remote_date" ]]; then
                 remote_version="${remote_date} (${remote_hash})"
                 printf "[$CHECK] Remote version: %s\n" "$remote_version"
             else
                 printf "[$CHECK] Remote hash: %s\n" "$remote_hash"
             fi
-            
+
             # Compare versions
             if [[ "$local_hash" == "$remote_hash" ]]; then
                 if [[ -n "$local_changes" ]]; then
@@ -443,7 +443,7 @@ if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
                 # Check if local is ahead, behind, or diverged
                 local_full_hash=$(git rev-parse HEAD 2>/dev/null)
                 remote_full_hash=$(git rev-parse origin/main 2>/dev/null)
-                
+
                 # Check if local commit is ancestor of remote (behind)
                 if git merge-base --is-ancestor "$local_full_hash" "$remote_full_hash" 2>/dev/null; then
                     printf "[$CROSS] Version status: behind remote (update available)\n"
