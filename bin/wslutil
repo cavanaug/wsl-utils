@@ -85,6 +85,32 @@ upgrade)
     fi
     exit 0
     ;;
+--version)
+    # Generate version in format: yr.mo.day (git hash)
+    if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
+        # Get HEAD commit date and hash from git
+        cd "${WSLUTIL_DIR}"
+        commit_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
+        commit_hash=$(git log -1 --format="%h" 2>/dev/null)
+        
+        # Check for local changes
+        local_changes=""
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+            local_changes=" (modified)"
+        elif [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
+            local_changes=" (untracked files)"
+        fi
+        
+        if [[ -n "$commit_date" && -n "$commit_hash" ]]; then
+            echo "wslutil ${commit_date} (${commit_hash})${local_changes}"
+        else
+            echo "wslutil unknown${local_changes}"
+        fi
+    else
+        echo "wslutil unknown (not a git repository)"
+    fi
+    exit 0
+    ;;
 *)
     # Check if running within WSL by inspecting the environment
     # This check is bypassed for 'upgrade', '--help', and external commands
