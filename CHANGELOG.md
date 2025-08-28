@@ -1,3 +1,25 @@
+## [unreleased]
+
+### 🚀 Features
+
+- ✨ add WSL version and Windows config checks
+
+### 💼 Other
+
+- ⚙️ refresh WSL configs and doctor script
+- ⚙️ Remove experimental wslconfig support
+- ⚙️ Add Xresources DPI & font settings
+- ⚙️ update .gitignore and wslutil config
+
+### 📚 Documentation
+
+- 📚 add DETAILS.md and simplify README
+
+### 🎨 Styling
+
+- 🎨 normalize whitespace and formatting in wslutil-setup
+- 🎨 indent tip output in doctor script
+- 🎨 add trailing newline to README.md
 
 ## [0.5.0] - 2025-08-27
 
