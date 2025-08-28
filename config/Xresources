@@ -1,0 +1,25 @@
+! Load via xrdb -merge ~/.Xresources
+!
+! DPI scaling setting
+! Set this value to a multiple of 96.
+! e.g., 192 for 2x scaling on a high-DPI monitor.
+! Fractional scaling can be done, but fonts might be less sharp.
+! 96*1.25=120, 96*1.5=144, 96*2=192, 96*2.5=240, 96*3=288
+Xft.dpi: 120
+
+! Font rendering settings
+! Enable font anti-aliasing to smooth font edges.
+Xft.antialias: 1
+
+! Enable font hinting for sharper text on the pixel grid.
+Xft.hinting: 1
+
+! Set the hint style. 'hintslight' is a good balance.
+Xft.hintstyle: hintslight
+
+! Set the subpixel layout.
+! 'rgb' is standard for most displays.
+Xft.rgba: rgb
+
+! Enable the LCD filter to reduce color fringing.
+Xft.lcdfilter: lcddefault
