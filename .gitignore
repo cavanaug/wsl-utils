@@ -1,4 +1,5 @@
 bin/*.exe
+bin/*.msc
 bin/code-insiders
 bin/wl-copy
 bin/code

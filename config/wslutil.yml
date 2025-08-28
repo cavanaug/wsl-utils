@@ -6,7 +6,7 @@ winexe:
     # - One benefit for using a direct symlink is that win-run does add about 500ms of overhead
     ########################################
     - cmd.exe #                 # You really really shouldnt be using this anymore...
-    - powerShell.exe #          # Used a slightly different name to avoid handling in git-browse
+    - powershell.exe #          #
     - rundll32.exe #            # Used by win-browser & xdg-open for browser launch
     - ipconfig.exe
     - net.exe
@@ -16,20 +16,19 @@ winexe:
     - tasklist.exe
     - "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
     - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"
-    - wt.exe
     ########################################
-    # Windows ADMIN CLI Extras (Dont work in my corporate environment :-( )
+    # Windows ADMIN CLI Extras
     ########################################
-    # - winget.exe #     # Doesnt work right due to needing elevated permissions for changes
+    - winget.exe #     # (elevation)
+    - gsudo.exe #      # gsudo is a sudo replacement for windows that theoretically works with wsl (elevation)
     # - SUDO.exe #       # Recased so as not to conflic with the linux sudo codmmand
-    # - gsudo.exe #      # gsudo is a sudo replacement for windows that theoretically works with wsl
 winrun:
     ########################################
     # Windows Built (Shim)
     # - These are linked to win-run which will try to fix any arguments to be windows compatible
     # - It will also attempt to fix the character encoding to utf8 for all output
     ########################################
-    - curl.exe #         # Sometimes used to test network connectivity & proxy
+    - curl.exe #              # Sometimes used to test network connectivity & proxy
     - subst.exe
     - reg.exe
     - regedit.exe
@@ -40,11 +39,12 @@ winrun:
     # - Generally for gui apps its best to just utilize win-open <file> to open the file in the default app
     # - Dont put applications like Word/Excel/Acrobat in here unless you dont want to use the default app
     ########################################
-    # - explorer.exe #      # just use win-open .
-    # - msedgea.exe #       # just set it as your default browser and use win-browser
-    # - brave.exe #         # just set it as your default browser and use win-browser
-    # - librewolf.exe #     # just set it as your default browser and use win-browser
-    # - firefox.exe #       # just set it as your default browser and use win-browser
-    - notepad.exe #       # just set it as the default txt editor and use win-open
-    - notepad++.exe #     # just set it as the default txt editor and use win-open
-    # - wt.exe #            # ive thought about trying to use wt.exe commands instead of tmux
+    # - explorer.exe #          # just use win-open .
+    # - msedgea.exe #           # just set it as your default browser and use win-browser
+    # - brave.exe #             # just set it as your default browser and use win-browser
+    # - librewolf.exe #         # just set it as your default browser and use win-browser
+    # - firefox.exe #           # just set it as your default browser and use win-browser
+    - notepad.exe #           # just set it as the default txt editor and use win-open
+    - notepad++.exe #         # just set it as the default txt editor and use win-open
+    - wt.exe #                # ive thought about trying to use wt.exe commands instead of tmux
+    - devmgmt.msc #             # Osccasionally need to see info about the system
