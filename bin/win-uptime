@@ -1,0 +1,168 @@
+#!/bin/bash
+#  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+#  │                                                                                     │
+#  │    ██╗    ██╗██╗███╗   ██╗      ██╗   ██╗██████╗ ████████╗██╗███╗   ███╗███████╗    │
+#  │    ██║    ██║██║████╗  ██║      ██║   ██║██╔══██╗╚══██╔══╝██║████╗ ████║██╔════╝    │
+#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██║   ██║██████╔╝   ██║   ██║██╔████╔██║█████╗      │
+#  │    ██║███╗██║██║██║╚██╗██║╚════╝██║   ██║██╔═══╝    ██║   ██║██║╚██╔╝██║██╔══╝      │
+#  │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╔╝██║        ██║   ██║██║ ╚═╝ ██║███████╗    │
+#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═╝        ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝    │
+#  │                                                                                     │
+#  └─────────────────────────────────────────────────────────────────────────────────────┘
+#  win-uptime
+#   - This script displays the uptime of the current WSL distribution (not the WSL VM)
+#   - It tracks uptime by examining process 1 (init) which represents the WSL distro startup
+#   - Output format matches traditional uptime command with load averages from the WSL perspective
+
+# Check for help option
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    cat << 'EOF'
+win-uptime - Show WSL distribution uptime
+
+USAGE:
+    win-uptime [OPTIONS]
+
+DESCRIPTION:
+    Shows how long the current WSL distribution has been running by examining
+    the init process (PID 1). This tracks the distribution uptime, not the
+    underlying WSL VM uptime.
+    
+    Output format matches the traditional uptime command with current time,
+    uptime duration, user count, and load averages.
+
+OPTIONS:
+    -h, --help    Show this help message and exit
+    -p, --pretty  Show uptime in pretty format
+    -s, --since   Show uptime since (start time)
+
+EXAMPLES:
+    win-uptime                    # Show standard uptime format
+    win-uptime --pretty           # Show human-readable format  
+    win-uptime --since            # Show WSL distro start time
+
+NOTES:
+    - Tracks WSL distribution uptime, not WSL VM uptime
+    - Based on init process (PID 1) start time
+    - Load averages reflect WSL distribution workload
+EOF
+    exit 0
+fi
+
+# Handle command line options
+PRETTY_FORMAT=false
+SINCE_FORMAT=false
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--pretty)
+            PRETTY_FORMAT=true
+            shift
+            ;;
+        -s|--since)
+            SINCE_FORMAT=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Use --help for usage information" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Get current time
+current_time=$(date)
+current_epoch=$(date +%s)
+
+# Get init process start time
+if [[ -f /proc/1/stat ]]; then
+    # Method 1: Use /proc/1/stat (more precise)
+    # Field 22 is starttime in clock ticks since boot
+    init_start_ticks=$(awk '{print $22}' /proc/1/stat)
+    # Get boot time from /proc/stat
+    boot_time=$(awk '/^btime / {print $2}' /proc/stat)
+    # Get clock ticks per second
+    clock_ticks=$(getconf CLK_TCK)
+    # Calculate init start time
+    init_start_epoch=$((boot_time + init_start_ticks / clock_ticks))
+else
+    # Method 2: Fallback to stat on /proc/1
+    init_start_epoch=$(stat -c %Y /proc/1 2>/dev/null || echo $current_epoch)
+fi
+
+# Calculate uptime in seconds
+uptime_seconds=$((current_epoch - init_start_epoch))
+
+# Handle since format
+if [[ "$SINCE_FORMAT" == "true" ]]; then
+    date -d "@$init_start_epoch"
+    exit 0
+fi
+
+# Function to format uptime duration
+format_uptime() {
+    local total_seconds=$1
+    local days=$((total_seconds / 86400))
+    local hours=$(((total_seconds % 86400) / 3600))
+    local minutes=$(((total_seconds % 3600) / 60))
+    local seconds=$((total_seconds % 60))
+    
+    if [[ "$PRETTY_FORMAT" == "true" ]]; then
+        # Pretty format
+        if [[ $days -gt 0 ]]; then
+            if [[ $days -eq 1 ]]; then
+                printf "up %d day, %d:%02d" $days $hours $minutes
+            else
+                printf "up %d days, %d:%02d" $days $hours $minutes
+            fi
+        elif [[ $hours -gt 0 ]]; then
+            printf "up %d:%02d" $hours $minutes
+        else
+            printf "up %d minutes" $minutes
+        fi
+    else
+        # Standard format
+        if [[ $days -gt 0 ]]; then
+            if [[ $days -eq 1 ]]; then
+                printf "up %d day, %d:%02d" $days $hours $minutes
+            else
+                printf "up %d days, %d:%02d" $days $hours $minutes
+            fi
+        elif [[ $hours -gt 0 ]]; then
+            printf "up %d:%02d" $hours $minutes
+        else
+            printf "up %d min" $minutes
+        fi
+    fi
+}
+
+# Get number of logged in users
+user_count=$(who | wc -l)
+if [[ $user_count -eq 1 ]]; then
+    user_text="1 user"
+else
+    user_text="$user_count users"
+fi
+
+# Get load averages
+if [[ -f /proc/loadavg ]]; then
+    load_avg=$(cat /proc/loadavg | cut -d' ' -f1-3)
+else
+    load_avg="0.00 0.00 0.00"
+fi
+
+# Format and display output
+uptime_str=$(format_uptime $uptime_seconds)
+
+if [[ "$PRETTY_FORMAT" == "true" ]]; then
+    echo "$uptime_str"
+else
+    # Standard uptime format
+    echo " $(date +"%H:%M:%S") ${uptime_str}, ${user_text}, load average: ${load_avg}"
+fi
+
+# Debug logging
+if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+    mkdir -p ${HOME}/.local/state/wslutil
+    echo "$(date --rfc-3339=s) - win-uptime: uptime=${uptime_seconds}s, init_start=${init_start_epoch}, current=${current_epoch}" >>${HOME}/.local/state/wslutil/win-uptime.log
+fi
