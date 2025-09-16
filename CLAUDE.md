@@ -20,6 +20,7 @@ This is `wsl-utils`, a collection of command-line utilities that simplify intero
 
 - `bin/wslutil`: Main entry point and command dispatcher
 - `bin/wslutil-doctor`: Health check and diagnostic tool for WSL environment
+- `bin/wslutil-uptime`: Display WSL distribution uptime (not VM uptime)
 - `bin/win-run`: Execute Windows commands with automatic path conversion
 - `bin/win-browser`: Open files/URLs in Windows default browser
 - `bin/win-copy`/`bin/win-paste`: Windows clipboard integration
@@ -83,6 +84,11 @@ Updates wsl-utils by running `git pull` in the installation directory.
 win-run <command> [args...]  # Execute Windows commands with path conversion
 win-open <file>              # Open file with Windows default app
 win-browser <url>            # Open URL in Windows default browser
+```
+
+### WSL Management
+```bash
+wslutil uptime               # Show WSL distribution uptime (not VM uptime)
 ```
 
 ## Development Notes

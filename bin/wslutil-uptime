@@ -9,7 +9,7 @@
 #  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═╝        ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝    │
 #  │                                                                                     │
 #  └─────────────────────────────────────────────────────────────────────────────────────┘
-#  win-uptime
+#  wslutil-uptime
 #   - This script displays the uptime of the current WSL distribution (not the WSL VM)
 #   - It tracks uptime by examining process 1 (init) which represents the WSL distro startup
 #   - Output format matches traditional uptime command with load averages from the WSL perspective
@@ -17,10 +17,10 @@
 # Check for help option
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
     cat << 'EOF'
-win-uptime - Show WSL distribution uptime
+wslutil uptime - Show WSL distribution uptime
 
 USAGE:
-    win-uptime [OPTIONS]
+    wslutil uptime [OPTIONS]
 
 DESCRIPTION:
     Shows how long the current WSL distribution has been running by examining
@@ -36,9 +36,9 @@ OPTIONS:
     -s, --since   Show uptime since (start time)
 
 EXAMPLES:
-    win-uptime                    # Show standard uptime format
-    win-uptime --pretty           # Show human-readable format  
-    win-uptime --since            # Show WSL distro start time
+    wslutil uptime                    # Show standard uptime format
+    wslutil uptime --pretty           # Show human-readable format  
+    wslutil uptime --since            # Show WSL distro start time
 
 NOTES:
     - Tracks WSL distribution uptime, not WSL VM uptime
@@ -164,5 +164,5 @@ fi
 # Debug logging
 if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
     mkdir -p ${HOME}/.local/state/wslutil
-    echo "$(date --rfc-3339=s) - win-uptime: uptime=${uptime_seconds}s, init_start=${init_start_epoch}, current=${current_epoch}" >>${HOME}/.local/state/wslutil/win-uptime.log
+    echo "$(date --rfc-3339=s) - wslutil-uptime: uptime=${uptime_seconds}s, init_start=${init_start_epoch}, current=${current_epoch}" >>${HOME}/.local/state/wslutil/wslutil-uptime.log
 fi

@@ -50,6 +50,7 @@ wslutil setup                 # Configure Windows executable symlinks
 | `wslutil shellenv` | Output shell environment setup commands |
 | `wslutil setup` | Configure system and create Windows executable symlinks |
 | `wslutil upgrade` | Update wsl-utils via git pull |
+| `wslutil uptime` | Show WSL distribution uptime (not VM uptime) |
 
 **Usage:**
 
@@ -57,6 +58,7 @@ wslutil setup                 # Configure Windows executable symlinks
 wslutil doctor                    # Check system health
 eval "$(wslutil shellenv)"        # Set up environment
 wslutil setup                     # Create Windows exe symlinks
+wslutil uptime                    # Show WSL distro uptime
 ```
 
 ### Script Categories
@@ -152,6 +154,11 @@ win-run notepad.exe ~/myfile.txt
 
 # Search clipboard content
 win-paste | grep "search-term"
+
+# Check WSL distribution uptime (not the underlying VM)
+wslutil uptime                    # Standard format
+wslutil uptime --pretty           # Human-readable format
+wslutil uptime --since            # Show when WSL distro started
 ```
 
 ## Next Steps

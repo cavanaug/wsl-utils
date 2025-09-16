@@ -129,6 +129,14 @@ win-paste | grep "important"         # Search clipboard content
 win-paste > restored.txt             # Save clipboard to file
 ```
 
+**Pattern 4: WSL System Monitoring**
+```bash
+# Monitor WSL distribution uptime (not VM uptime)
+wslutil uptime                       # Standard uptime format
+wslutil uptime --pretty              # Human-readable format  
+wslutil uptime --since               # Show WSL distro start time
+```
+
 ### Extensibility
 
 **Adding Custom Subcommands:**
@@ -174,6 +182,16 @@ wslutil doctor
 
 # Verify interop socket
 ls -la $WSL_INTEROP
+```
+
+**WSL Distribution Monitoring**
+```bash
+# Check WSL distribution uptime (different from system uptime)
+wslutil uptime                       # Shows WSL distro uptime, not VM
+uptime                               # Shows underlying system/VM uptime
+
+# Useful for troubleshooting WSL restarts vs system reboots
+wslutil uptime --since               # When did WSL distro last start?
 ```
 
 **Path Conversion Problems**
