@@ -1,14 +1,15 @@
 #!/bin/bash
-#  ┌─────────────────────────────────────────────────────────────────────────────────────┐
-#  │                                                                                     │
-#  │    ██╗    ██╗██╗███╗   ██╗      ██╗   ██╗██████╗ ████████╗██╗███╗   ███╗███████╗    │
-#  │    ██║    ██║██║████╗  ██║      ██║   ██║██╔══██╗╚══██╔══╝██║████╗ ████║██╔════╝    │
-#  │    ██║ █╗ ██║██║██╔██╗ ██║█████╗██║   ██║██████╔╝   ██║   ██║██╔████╔██║█████╗      │
-#  │    ██║███╗██║██║██║╚██╗██║╚════╝██║   ██║██╔═══╝    ██║   ██║██║╚██╔╝██║██╔══╝      │
-#  │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╔╝██║        ██║   ██║██║ ╚═╝ ██║███████╗    │
-#  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═╝        ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝    │
-#  │                                                                                     │
-#  └─────────────────────────────────────────────────────────────────────────────────────┘
+#  ┌────────────────────────────────────────────────────────┐
+#  │                       WSLUTIL                          │
+#  │                                                        │
+#  │    ██╗   ██╗██████╗ ████████╗██╗███╗   ███╗███████╗    │
+#  │    ██║   ██║██╔══██╗╚══██╔══╝██║████╗ ████║██╔════╝    │
+#  │    ██║   ██║██████╔╝   ██║   ██║██╔████╔██║█████╗      │
+#  │    ██║   ██║██╔═══╝    ██║   ██║██║╚██╔╝██║██╔══╝      │
+#  │    ╚██████╔╝██║        ██║   ██║██║ ╚═╝ ██║███████╗    │
+#  │     ╚═════╝ ╚═╝        ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝    │
+#  │                                                        │
+#  └────────────────────────────────────────────────────────┘
 #  wslutil-uptime
 #   - This script displays the uptime of the current WSL distribution (not the WSL VM)
 #   - It tracks uptime by examining process 1 (init) which represents the WSL distro startup
@@ -16,7 +17,7 @@
 
 # Check for help option
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
-    cat << 'EOF'
+    cat <<'EOF'
 wslutil uptime - Show WSL distribution uptime
 
 USAGE:
@@ -26,7 +27,7 @@ DESCRIPTION:
     Shows how long the current WSL distribution has been running by examining
     the init process (PID 1). This tracks the distribution uptime, not the
     underlying WSL VM uptime.
-    
+
     Output format matches the traditional uptime command with current time,
     uptime duration, user count, and load averages.
 
@@ -37,7 +38,7 @@ OPTIONS:
 
 EXAMPLES:
     wslutil uptime                    # Show standard uptime format
-    wslutil uptime --pretty           # Show human-readable format  
+    wslutil uptime --pretty           # Show human-readable format
     wslutil uptime --since            # Show WSL distro start time
 
 NOTES:
@@ -54,19 +55,19 @@ SINCE_FORMAT=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -p|--pretty)
-            PRETTY_FORMAT=true
-            shift
-            ;;
-        -s|--since)
-            SINCE_FORMAT=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1" >&2
-            echo "Use --help for usage information" >&2
-            exit 1
-            ;;
+    -p | --pretty)
+        PRETTY_FORMAT=true
+        shift
+        ;;
+    -s | --since)
+        SINCE_FORMAT=true
+        shift
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        echo "Use --help for usage information" >&2
+        exit 1
+        ;;
     esac
 done
 
@@ -106,7 +107,7 @@ format_uptime() {
     local hours=$(((total_seconds % 86400) / 3600))
     local minutes=$(((total_seconds % 3600) / 60))
     local seconds=$((total_seconds % 60))
-    
+
     if [[ "$PRETTY_FORMAT" == "true" ]]; then
         # Pretty format
         if [[ $days -gt 0 ]]; then
