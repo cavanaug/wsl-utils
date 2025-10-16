@@ -7,3 +7,4 @@ bin/wl-paste
 .aider*
 .envrc
 .claude/settings.local.json
+.claude

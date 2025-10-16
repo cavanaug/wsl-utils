@@ -45,6 +45,7 @@ OPTIONS
     --raw           Bypass UTF-8 output processing (useful for binary output)
     --plain         Skip automatic path conversion for arguments
     -c FILE         Use custom config file instead of default hierarchy
+    -v, --verbose   Show the full PowerShell command being executed
     --help          Show this help message and exit
 
 CONFIGURATION
@@ -241,6 +242,7 @@ CMDARGS=()
 RAW_OUTPUT=false
 PLAIN_MODE=false
 CUSTOM_CONFIG=""
+VERBOSE=false
 
 if [[ -L "$0" ]]; then
     # Invoked via symlink
@@ -266,6 +268,10 @@ else
             ;;
         --plain)
             PLAIN_MODE=true
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
             shift
             ;;
         -c)
@@ -330,10 +336,30 @@ fi
 
 # Process arguments for path conversion
 for i in "${ARGS_TO_PROCESS[@]}"; do
-    if [[ "$PLAIN_MODE" = false && (-f $i || -d $i) ]]; then
-        # Anything that is a file or directory will be converted to a windows path, potentially with a substituted drive letter
-        # Use the -W flag to invoke the substitution logic in our wrapper
-        CMDARGS+=("$(wslpath -w "${i}")")
+    if [[ "$PLAIN_MODE" = false ]]; then
+        # Check if argument should be converted to Windows path:
+        # 1. File or directory exists
+        # 2. Looks like a path (contains / or starts with ~, ., /)
+        # 3. Parent directory exists (for new file creation)
+        if [[ -f "$i" || -d "$i" ]]; then
+            # Resolve to physical path before converting
+            physical_path=$(readlink -f "$i")
+            CMDARGS+=("$(wslpath -w "${physical_path}")")
+        elif [[ "$i" == /* || "$i" == ~* || "$i" == ./* || "$i" == ../* || "$i" == */* ]]; then
+            # Looks like a path - check if parent directory exists
+            parent_dir=$(dirname "$i")
+            if [[ -d "$parent_dir" ]]; then
+                # Resolve parent to physical path, then append filename
+                physical_parent=$(readlink -f "$parent_dir")
+                filename=$(basename "$i")
+                physical_path="${physical_parent}/${filename}"
+                CMDARGS+=("$(wslpath -w "${physical_path}")")
+            else
+                CMDARGS+=("${i}")
+            fi
+        else
+            CMDARGS+=("${i}")
+        fi
     else
         CMDARGS+=("${i}")
     fi
@@ -358,7 +384,15 @@ fi
 
 set -euo pipefail
 if [ "$RAW_OUTPUT" = true ]; then
-    "$POWERSHELL_EXE" -NoProfile -Command "& \"${CMD}\" ${CMDARGS[@]}"
+    PS_CMD="& \"${CMD}\" ${CMDARGS[@]}"
+    if [ "$VERBOSE" = true ]; then
+        echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
+    fi
+    "$POWERSHELL_EXE" -NoProfile -Command "$PS_CMD"
 else
-    "$POWERSHELL_EXE" -NoProfile -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}" | ensure_utf8
+    PS_CMD="[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}"
+    if [ "$VERBOSE" = true ]; then
+        echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
+    fi
+    "$POWERSHELL_EXE" -NoProfile -Command "$PS_CMD" | ensure_utf8
 fi

@@ -35,11 +35,13 @@ OPTIONS:
     -h, --help    Show this help message and exit
     -p, --pretty  Show uptime in pretty format
     -s, --since   Show uptime since (start time)
+    -S, --seconds Show uptime in seconds
 
 EXAMPLES:
     wslutil uptime                    # Show standard uptime format
     wslutil uptime --pretty           # Show human-readable format
     wslutil uptime --since            # Show WSL distro start time
+    wslutil uptime --seconds          # Show uptime in seconds
 
 NOTES:
     - Tracks WSL distribution uptime, not WSL VM uptime
@@ -52,6 +54,7 @@ fi
 # Handle command line options
 PRETTY_FORMAT=false
 SINCE_FORMAT=false
+SECONDS_FORMAT=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -61,6 +64,10 @@ while [[ $# -gt 0 ]]; do
         ;;
     -s | --since)
         SINCE_FORMAT=true
+        shift
+        ;;
+    -S | --seconds)
+        SECONDS_FORMAT=true
         shift
         ;;
     *)
@@ -96,7 +103,13 @@ uptime_seconds=$((current_epoch - init_start_epoch))
 
 # Handle since format
 if [[ "$SINCE_FORMAT" == "true" ]]; then
-    date -d "@$init_start_epoch"
+    date -d "@$init_start_epoch" +"%Y-%m-%d %H:%M:%S"
+    exit 0
+fi
+
+# Handle seconds format
+if [[ "$SECONDS_FORMAT" == "true" ]]; then
+    echo "$uptime_seconds"
     exit 0
 fi
 

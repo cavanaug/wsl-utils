@@ -77,4 +77,4 @@ if __name__ == "__main__":
 '
 }
 
-ensure_utf8 | dos2unix
+ensure_utf8 | tr -d '\r'
