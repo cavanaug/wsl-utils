@@ -6,7 +6,7 @@ winexe:
     # - One benefit for using a direct symlink is that win-run does add about 500ms of overhead
     ########################################
     - cmd.exe #                 # You really really shouldnt be using this anymore...
-    - powershell.exe #          #
+    - powerShell.exe #          #
     - rundll32.exe #            # Used by win-browser & xdg-open for browser launch
     - ipconfig.exe
     - net.exe

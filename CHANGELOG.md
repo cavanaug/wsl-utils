@@ -3,6 +3,10 @@
 ### 🚀 Features
 
 - ✨ add WSL version and Windows config checks
+- ✨ add win-uptime script
+- ✨ add wslutil uptime subcommand
+- ✨ add verbose and seconds options to tools
+- ✨ add UTF-16LE to UTF-8 conversion
 
 ### 💼 Other
 
@@ -14,12 +18,14 @@
 ### 📚 Documentation
 
 - 📚 add DETAILS.md and simplify README
+- 📚 update changelog for unreleased changes
 
 ### 🎨 Styling
 
 - 🎨 normalize whitespace and formatting in wslutil-setup
 - 🎨 indent tip output in doctor script
 - 🎨 add trailing newline to README.md
+- 🎨 Refactor wslutil-uptime formatting
 
 ## [0.5.0] - 2025-08-27
 
