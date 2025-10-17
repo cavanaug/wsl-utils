@@ -14,14 +14,15 @@ winexe:
     - systeminfo.exe
     - taskkill.exe
     - tasklist.exe
-    - "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
+    #- "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
+    - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code/bin/code"
     - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"
     ########################################
     # Windows ADMIN CLI Extras
     ########################################
     - winget.exe #     # (elevation)
     - gsudo.exe #      # gsudo is a sudo replacement for windows that theoretically works with wsl (elevation)
-    # - SUDO.exe #       # Recased so as not to conflic with the linux sudo codmmand
+    # - SUDO.exe #       # Recased so as not to conflict with the linux sudo codmmand
 winrun:
     ########################################
     # Windows Built (Shim)

@@ -182,8 +182,87 @@ POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 # from windows called via powershell.   I have found  no mechanism to do this reliably
 # in bash directly.   This is performed as an embedded python3 script so as not to add yet
 # another script to the system.
-#
+
+# Process stdout/stderr in streaming fashion while ensuring UTF-8 encoding.
 function ensure_utf8 {
+    # Pipe stdin directly to the python3 interpreter.
+    # ensuring the code is passed literally.
+    python3 -c '
+import sys
+import codecs
+
+CHUNK_SIZE = 512  # 8192
+
+def is_utf16le(peek_buffer):
+    if len(peek_buffer) < 2:
+        return False
+
+    is_bom_utf16le = peek_buffer.startswith(b"\xff\xfe")
+    is_bomless_utf16le = (peek_buffer[1] == 0 and peek_buffer[0] != 0)
+
+    return is_bom_utf16le or is_bomless_utf16le
+
+def stream_utf16le_to_utf8(peek_buffer):
+    decoder = codecs.getincrementaldecoder("utf-16-le")(errors="replace")
+    encoder = codecs.getincrementalencoder("utf-8")(errors="replace")
+
+    decoded_text = decoder.decode(peek_buffer, False)
+    decoded_text = decoded_text.lstrip("\ufeff")
+    if decoded_text:
+        sys.stdout.buffer.write(encoder.encode(decoded_text, False))
+
+    while True:
+        chunk = sys.stdin.buffer.read(CHUNK_SIZE)
+        if not chunk:
+            final_text = decoder.decode(b'', True)
+            if final_text:
+                sys.stdout.buffer.write(encoder.encode(final_text, True))
+            break
+
+        decoded_text = decoder.decode(chunk, False)
+        if decoded_text:
+            sys.stdout.buffer.write(encoder.encode(decoded_text, False))
+
+def stream_passthrough(peek_buffer):
+    sys.stdout.buffer.write(peek_buffer)
+
+    while True:
+        chunk = sys.stdin.buffer.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        sys.stdout.buffer.write(chunk)
+
+def main():
+    peek_buffer = sys.stdin.buffer.read(2)
+
+    if not peek_buffer:
+        return
+
+    if len(peek_buffer) < 2:
+        sys.stdout.buffer.write(peek_buffer)
+        return
+
+    try:
+        if is_utf16le(peek_buffer):
+            stream_utf16le_to_utf8(peek_buffer)
+        else:
+            stream_passthrough(peek_buffer)
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        sys.stdout.buffer.write(peek_buffer)
+        while True:
+            chunk = sys.stdin.buffer.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            sys.stdout.buffer.write(chunk)
+
+if __name__ == "__main__":
+    main()
+    '
+}
+
+#
+# Process full stdout/stderr before ensuring UTF-8 encoding.
+function ensure_utf8f {
     # Pipe stdin directly to the python3 interpreter.
     # The 'EOF' is quoted to prevent shell expansion within the Python code,
     # ensuring the code is passed literally.
@@ -270,7 +349,7 @@ else
             PLAIN_MODE=true
             shift
             ;;
-        -v|--verbose)
+        -v | --verbose)
             VERBOSE=true
             shift
             ;;
