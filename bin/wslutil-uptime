@@ -14,6 +14,7 @@
 #   - This script displays the uptime of the current WSL distribution (not the WSL VM)
 #   - It tracks uptime by examining process 1 (init) which represents the WSL distro startup
 #   - Output format matches traditional uptime command with load averages from the WSL perspective
+set -euo pipefail
 
 # Check for help option
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then

@@ -11,6 +11,7 @@
 #  └───────────────────────────────────────────────────────────────┘
 # wslutil - Windows Subsystem for Linux utility
 #
+set -euo pipefail
 
 # Function to handle 'shellenv' subcommand
 shellenv_command() {
@@ -98,7 +99,7 @@ upgrade)
         cd "${WSLUTIL_DIR}"
         commit_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
         commit_hash=$(git log -1 --format="%h" 2>/dev/null)
-        
+
         # Check for local changes
         local_changes=""
         if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
@@ -106,7 +107,7 @@ upgrade)
         elif [[ -n "$(git ls-files --others --exclude-standard 2>/dev/null)" ]]; then
             local_changes=" (untracked files)"
         fi
-        
+
         if [[ -n "$commit_date" && -n "$commit_hash" ]]; then
             echo "wslutil ${commit_date} (${commit_hash})${local_changes}"
         else

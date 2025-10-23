@@ -17,6 +17,7 @@
 #
 # Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
 #
+set -euo pipefail
 
 # Check for help option
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then

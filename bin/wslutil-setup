@@ -1,5 +1,4 @@
 #!/usr/bin/bash
-#
 # ┌───────────────────────────────────────────────────────────┐
 # │                       WSLUTIL                             │
 # │                                                           │
@@ -12,6 +11,7 @@
 # │                                                           │
 # └───────────────────────────────────────────────────────────┘
 # wslutil-setup - Configure and merge wslutil settings
+set -euo pipefail
 
 show_help() {
     cat <<EOF

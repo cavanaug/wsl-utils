@@ -15,7 +15,8 @@
 #  - Generally you are better off using win-run <exe> which will automatically take care of this for you
 #
 # Usage: <windows command file powershell.exe or cmd.exe> | win-utf8
-#
+set -euo pipefail
+
 # Forcibly ensure that output is UTF-8 encoded, need to peek at input to detect if its
 # utf-16le (aka unicode) or if its already utf-8.   This is essential for processing output
 # from windows called via powershell.   I have found  no mechanism to do this reliably

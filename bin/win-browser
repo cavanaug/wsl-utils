@@ -13,6 +13,7 @@
 #   - This script is used to open files, directories, uri's in the default Windows browser from WSL
 #   - It is best used in conjunction with the xdg-utils package and registering as the xdg-open default web-browser
 #   - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windows paths.
+set -euo pipefail
 
 # Set basic windows environment variables
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}

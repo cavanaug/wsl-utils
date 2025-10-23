@@ -16,6 +16,7 @@
 #  - It will run the command in powershell attempting to find it using the windows PATH
 #    - Utilize winutil alias to create alias mappings that have a full path for items not in PATH
 #
+set -euo pipefail
 
 # Set up environment variables for alias resolution
 export WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}

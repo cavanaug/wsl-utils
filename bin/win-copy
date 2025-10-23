@@ -17,6 +17,7 @@
 #  - It is best used to symlink wl-copy to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
 #  - wslutil checkhealth will tell you if you need this script or not
 #
+set -euo pipefail
 
 # Check for help option
 if [[ "$1" == "--help" || "$1" == "-h" ]]; then
@@ -29,13 +30,13 @@ USAGE:
 DESCRIPTION:
     Reads content from stdin and copies it to the Windows clipboard.
     Serves as a fallback for systems without WSLg support.
-    
+
     If WSLg is available and enabled, uses wl-copy for better integration.
     Otherwise, uses Windows clip.exe command.
 
 OPTIONS:
     -h, --help    Show this help message and exit
-    
+
     When WSLg is available, all wl-copy options are supported:
     -o, --trim-newline    Trim final newline character
     -n, --foreground      Stay in foreground (don't fork)
@@ -49,7 +50,7 @@ EXAMPLES:
     ls -la | win-copy                 # Copy command output
 
 NOTES:
-    - Logs usage to ~/.local/state/wslutil/win-clipboard.log  
+    - Logs usage to ~/.local/state/wslutil/win-clipboard.log
     - Primary fallback for non-WSLg environments
     - Can be symlinked as wl-copy for compatibility
     - Only needed on older Windows 10 systems without WSLg

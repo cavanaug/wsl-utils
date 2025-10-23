@@ -1,5 +1,4 @@
 #!/usr/bin/bash
-#
 # ┌───────────────────────────────────────────────────────────┐
 # │                       WSLUTIL                             │
 # │                                                           │
@@ -12,6 +11,7 @@
 # │                                                           │
 # └───────────────────────────────────────────────────────────┘
 # wslutil-doctor - Diagnose the health of wslutil's environment
+set -euo pipefail
 
 show_help() {
     cat <<EOF

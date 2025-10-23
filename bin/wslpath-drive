@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # Contains the wslpath_drive function to convert WSL paths to Windows paths,
 # potentially substituting drive letters based on 'subst.exe' output.
 

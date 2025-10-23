@@ -12,6 +12,8 @@
 #  - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windpaths.
 #  - It is equivalent to double-clicking on a file or directory in Windows.
 #
+set -euo pipefail
+
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 cliargs=()
 for i in "$@"; do
