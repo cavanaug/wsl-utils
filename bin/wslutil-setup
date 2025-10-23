@@ -263,7 +263,7 @@ create_direct_symlink() {
     local symlink_name=""
 
     # Perform variable expansion on the executable path
-    executable=$(eval echo "$executable")
+    executable=$(echo "$executable" | envsubst)
 
     # Check if this is a full path or just an executable name
     if [[ "$executable" == /* ]]; then

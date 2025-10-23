@@ -33,7 +33,10 @@ upgrade_command() {
         case "$1" in
         --fetch)
             echo "Fetch but dont apply upgrades."
-            (cd $WSLUTIL_DIR && git fetch)
+            if ! (cd "$WSLUTIL_DIR" && git fetch); then
+                echo "ERROR: Failed to fetch updates from git repository" >&2
+                exit 1
+            fi
             exit 0
             ;;
         *)
@@ -43,7 +46,10 @@ upgrade_command() {
         esac
         shift
     done
-    (cd $WSLUTIL_DIR && git pull)
+    if ! (cd "$WSLUTIL_DIR" && git pull); then
+        echo "ERROR: Failed to pull updates from git repository" >&2
+        exit 1
+    fi
 }
 
 # SHould make this a test if environment variable is set but doesnt match the the grandparent then error out.
