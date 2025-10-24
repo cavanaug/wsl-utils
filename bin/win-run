@@ -126,8 +126,8 @@ resolve_alias() {
             alias_path=$(yq eval ".aliases.\"$cmd\".path // null" "$config_file" 2>/dev/null)
 
             if [[ "$alias_path" != "null" && -n "$alias_path" ]]; then
-                # Resolve environment variables in the path
-                alias_path=$(echo "$alias_path" | envsubst)
+                # Resolve environment variables in the path (restrict to safe variables)
+                alias_path=$(echo "$alias_path" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
                 # Convert to Windows path
                 alias_path=$(wslpath -w "$alias_path" 2>/dev/null || echo "$alias_path")
                 echo "$alias_path"
@@ -167,8 +167,8 @@ get_alias_options() {
             alias_options=$(yq eval ".aliases.\"$cmd\".options // null" "$config_file" 2>/dev/null)
 
             if [[ "$alias_options" != "null" && -n "$alias_options" ]]; then
-                # Resolve environment variables in the options
-                alias_options=$(echo "$alias_options" | envsubst)
+                # Resolve environment variables in the options (restrict to safe variables)
+                alias_options=$(echo "$alias_options" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
                 echo "$alias_options"
                 return
             fi
@@ -465,23 +465,22 @@ fi
 
 set -euo pipefail
 
-# Build properly quoted PowerShell arguments
-if [ ${#CMDARGS[@]} -eq 0 ]; then
-    PS_ARGS=""
-else
-    printf -v PS_ARGS ' "%s"' "${CMDARGS[@]}"
-fi
-
 if [ "$RAW_OUTPUT" = true ]; then
-    PS_CMD="& \"${CMD}\"${PS_ARGS}"
     if [ "$VERBOSE" = true ]; then
-        echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
+        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> -Cmd \"$CMD\" -Args ..." >&2
     fi
-    "$POWERSHELL_EXE" -NoProfile -Command "$PS_CMD"
+    if [ ${#CMDARGS[@]} -eq 0 ]; then
+        "$POWERSHELL_EXE" -NoProfile -Command 'param($Cmd) & $Cmd' -Cmd "$CMD"
+    else
+        "$POWERSHELL_EXE" -NoProfile -Command 'param($Cmd, [string[]]$Args) & $Cmd @Args' -Cmd "$CMD" -Args "${CMDARGS[@]}"
+    fi
 else
-    PS_CMD="[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\"${PS_ARGS}"
     if [ "$VERBOSE" = true ]; then
-        echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
+        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> -Cmd \"$CMD\" -Args ..." >&2
     fi
-    "$POWERSHELL_EXE" -NoProfile -Command "$PS_CMD" | ensure_utf8
+    if [ ${#CMDARGS[@]} -eq 0 ]; then
+        "$POWERSHELL_EXE" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; param($Cmd) & $Cmd' -Cmd "$CMD" | ensure_utf8
+    else
+        "$POWERSHELL_EXE" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; param($Cmd, [string[]]$Args) & $Cmd @Args' -Cmd "$CMD" -Args "${CMDARGS[@]}" | ensure_utf8
+    fi
 fi

@@ -262,8 +262,8 @@ create_direct_symlink() {
     local win_executable=""
     local symlink_name=""
 
-    # Perform variable expansion on the executable path
-    executable=$(echo "$executable" | envsubst)
+    # Perform variable expansion on the executable path (restrict to safe variables)
+    executable=$(echo "$executable" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
 
     # Check if this is a full path or just an executable name
     if [[ "$executable" == /* ]]; then

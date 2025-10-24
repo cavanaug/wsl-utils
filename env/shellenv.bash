@@ -115,6 +115,12 @@ wait_for_build_complete
 
 # Source the cache (guaranteed to exist and be complete now)
 if [[ -f "${WIN_ENV_FILE}.sh" ]]; then
+    # Validate cache file contains only WIN_ENV assignments
+    if grep -qvE '^(WIN_ENV\[|declare -A WIN_ENV|#|$)' "${WIN_ENV_FILE}.sh"; then
+        echo "ERROR: Cache file contains suspicious content" >&2
+        rm -f "${WIN_ENV_FILE}.sh" "${WIN_ENV_FILE}.win"
+        return 1
+    fi
     source "${WIN_ENV_FILE}.sh"
 fi
 
