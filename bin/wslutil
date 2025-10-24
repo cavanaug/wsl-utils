@@ -16,7 +16,7 @@ set -euo pipefail
 # Function to handle 'shellenv' subcommand
 shellenv_command() {
     # Add argument processing for 'shellenv' here
-    SHELLENV=$(basename $SHELL)
+    SHELLENV=$(basename "$SHELL")
     if [[ -f "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}" ]]; then
         echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
         cat "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}"
@@ -55,21 +55,21 @@ upgrade_command() {
 
 # SHould make this a test if environment variable is set but doesnt match the the grandparent then error out.
 # WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
-WSLUTIL_DIR="$(dirname $(dirname "$0"))"
+WSLUTIL_DIR="$(dirname "$(dirname "$0")")"
 
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
 shellenv)
-    if [[ "$2" == "--help" ]]; then
-        echo "Usage: $(basename $0) shellenv"
+    if [[ $# -gt 1 && "$2" == "--help" ]]; then
+        echo "Usage: $(basename "$0") shellenv"
         exit 0
     fi
     shift
     shellenv_command "$@"
     ;;
 upgrade)
-    if [[ "$2" == "--help" ]]; then
-        echo "Usage: $(basename $0) upgrade [--check]"
+    if [[ $# -gt 1 && "$2" == "--help" ]]; then
+        echo "Usage: $(basename "$0") upgrade [--check]"
         echo "  --check    Check for upgrades"
         exit 0
     fi

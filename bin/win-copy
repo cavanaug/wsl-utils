@@ -20,7 +20,7 @@
 set -euo pipefail
 
 # Check for help option
-if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat << 'EOF'
 win-copy - Copy from stdin to Windows clipboard
 

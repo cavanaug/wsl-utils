@@ -17,7 +17,7 @@
 set -euo pipefail
 
 # Check for help option
-if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+if [[ $# -gt 0 && ("$1" == "--help" || "$1" == "-h") ]]; then
     cat <<'EOF'
 wslutil uptime - Show WSL distribution uptime
 
@@ -161,7 +161,7 @@ fi
 
 # Get load averages
 if [[ -f /proc/loadavg ]]; then
-    load_avg=$(cat /proc/loadavg | cut -d' ' -f1-3)
+    load_avg=$(cut -d' ' -f1-3 </proc/loadavg)
 else
     load_avg="0.00 0.00 0.00"
 fi

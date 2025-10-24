@@ -194,7 +194,7 @@ for cmd_path in "${REQUIRED_COMMANDS[@]}"; do
     else
         printf "$CROSS"
         status="missing"
-        ((MISSING_COMMANDS++))
+        ((MISSING_COMMANDS+=1))
         MISSING_COMMAND_PATHS["$cmd_path"]=1 # Mark path as missing
     fi
     printf "] %s\n" "$cmd_path"
@@ -248,7 +248,7 @@ for file in "${REQUIRED_FILES[@]}"; do
     else
         printf "$CROSS"
         status="missing"
-        ((MISSING_FILES++))
+        ((MISSING_FILES+=1))
     fi
     printf "] %s\n" "$file"
 done
@@ -267,14 +267,14 @@ for symlink_spec in "${REQUIRED_SYMLINKS[@]}"; do
         else
             printf "$CROSS"
             status="incorrect symlink target"
-            ((MISSING_FILES++))
-            ((MISSING_SYMLINKS++))
+            ((MISSING_FILES+=1))
+            ((MISSING_SYMLINKS+=1))
             MISSING_SYMLINK_PATHS["$symlink_spec"]=1
         fi
     else
         printf "$CROSS"
         status="missing symlink"
-        ((MISSING_FILES++))
+        ((MISSING_FILES+=1))
         ((MISSING_SYMLINKS++))
         MISSING_SYMLINK_PATHS["$symlink_spec"]=1
     fi
@@ -298,7 +298,7 @@ if [[ -n "$WIN_USERPROFILE" ]]; then
         else
             printf "$CROSS"
             status="missing"
-            ((MISSING_FILES++))
+            ((MISSING_FILES+=1))
         fi
         printf "] %s\n" "$file"
     done
@@ -320,11 +320,11 @@ if command -v crudini >/dev/null 2>&1; then
             if crudini --get /etc/wsl.conf "$section" &>/dev/null; then
                 printf "$CHECK"
                 status="found"
-                ((FILE_CONTENT_PASSED++))
+                ((FILE_CONTENT_PASSED+=1))
             else
                 printf "$CROSS"
                 status="missing (warn)"
-                ((WARNINGS++))
+                ((WARNINGS+=1))
             fi
             printf "] [wsl.conf] %s\n" "section [$section]"
         done
@@ -342,11 +342,11 @@ if command -v crudini >/dev/null 2>&1; then
                 if crudini --get "$WIN_USERPROFILE/.wslconfig" "$section" &>/dev/null; then
                     printf "$CHECK"
                     status="found"
-                    ((FILE_CONTENT_PASSED++))
+                    ((FILE_CONTENT_PASSED+=1))
                 else
                     printf "$CROSS"
                     status="missing (warn)"
-                    ((WARNINGS++))
+                    ((WARNINGS+=1))
                 fi
                 printf "] [.wslconfig] %s\n" "section [$section]"
             done
@@ -361,11 +361,11 @@ if command -v crudini >/dev/null 2>&1; then
                 if crudini --get "$WIN_USERPROFILE/.wslgconfig" "$section" &>/dev/null; then
                     printf "$CHECK"
                     status="found"
-                    ((FILE_CONTENT_PASSED++))
+                    ((FILE_CONTENT_PASSED+=1))
                 else
                     printf "$CROSS"
                     status="missing (warn)"
-                    ((WARNINGS++))
+                    ((WARNINGS+=1))
                 fi
                 printf "] [.wslgconfig] %s\n" "section [$section]"
             done
@@ -433,7 +433,11 @@ get_install_suggestion() {
 
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
-ENV_OK=$($WSL_OK && $WSLUTIL_OK && $WIN_USERPROFILE_OK && $WIN_WINDIR_OK && echo true || echo false)
+if $WSL_OK && $WSLUTIL_OK && $WIN_USERPROFILE_OK && $WIN_WINDIR_OK; then
+    ENV_OK=true
+else
+    ENV_OK=false
+fi
 
 if [ "$TOTAL_MISSING" -eq 0 ] && [ "$WARNINGS" -eq 0 ] && $ENV_OK; then
     printf "${GREEN}All checks passed. wslutil environment looks good!${RESET}\n\n"

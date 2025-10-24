@@ -427,8 +427,9 @@ for i in "${ARGS_TO_PROCESS[@]}"; do
             CMDARGS+=("$(wslpath -w "${physical_path}")")
         elif [[ "$i" == /* || "$i" == ~* || "$i" == ./* || "$i" == ../* || "$i" == */* ]]; then
             # Looks like a path - check if parent directory exists
+            # Skip conversion if parent is root (/) to avoid converting Windows options like /all
             parent_dir=$(dirname "$i")
-            if [[ -d "$parent_dir" ]]; then
+            if [[ -d "$parent_dir" && "$parent_dir" != "/" ]]; then
                 # Resolve parent to physical path, then append filename
                 physical_parent=$(readlink -f "$parent_dir")
                 filename=$(basename "$i")
@@ -459,18 +460,26 @@ if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
     if [[ "$CMD" != "$CMD_NAME" ]]; then
         ALIAS_LOG="(alias: $CMD_NAME -> $CMD) "
     fi
-    echo "win-run ${FLAGS_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[@]}" >>${HOME}/.local/state/wslutil/win-run.log
+    echo "win-run ${FLAGS_LOG}${ALIAS_LOG}${SYM}${CMD} ${CMDARGS[*]}" >>${HOME}/.local/state/wslutil/win-run.log
 fi
 
 set -euo pipefail
+
+# Build properly quoted PowerShell arguments
+if [ ${#CMDARGS[@]} -eq 0 ]; then
+    PS_ARGS=""
+else
+    printf -v PS_ARGS ' "%s"' "${CMDARGS[@]}"
+fi
+
 if [ "$RAW_OUTPUT" = true ]; then
-    PS_CMD="& \"${CMD}\" ${CMDARGS[@]}"
+    PS_CMD="& \"${CMD}\"${PS_ARGS}"
     if [ "$VERBOSE" = true ]; then
         echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
     fi
     "$POWERSHELL_EXE" -NoProfile -Command "$PS_CMD"
 else
-    PS_CMD="[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\" ${CMDARGS[@]}"
+    PS_CMD="[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \$OutputEncoding = [System.Text.Encoding]::UTF8; & \"${CMD}\"${PS_ARGS}"
     if [ "$VERBOSE" = true ]; then
         echo "+ $POWERSHELL_EXE -NoProfile -Command \"$PS_CMD\"" >&2
     fi
