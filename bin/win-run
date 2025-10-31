@@ -467,20 +467,20 @@ set -euo pipefail
 
 if [ "$RAW_OUTPUT" = true ]; then
     if [ "$VERBOSE" = true ]; then
-        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> -Cmd \"$CMD\" -Args ..." >&2
+        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> \"$CMD\" ${CMDARGS[*]}" >&2
     fi
     if [ ${#CMDARGS[@]} -eq 0 ]; then
-        "$POWERSHELL_EXE" -NoProfile -Command 'param($Cmd) & $Cmd' -Cmd "$CMD"
+        "$POWERSHELL_EXE" -NoProfile -Command '& { & $args[0] }' "$CMD"
     else
-        "$POWERSHELL_EXE" -NoProfile -Command 'param($Cmd, [string[]]$Args) & $Cmd @Args' -Cmd "$CMD" -Args "${CMDARGS[@]}"
+        "$POWERSHELL_EXE" -NoProfile -Command '& { & $args[0] $args[1..($args.Length-1)] }' "$CMD" "${CMDARGS[@]}"
     fi
 else
     if [ "$VERBOSE" = true ]; then
-        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> -Cmd \"$CMD\" -Args ..." >&2
+        echo "+ $POWERSHELL_EXE -NoProfile -Command <script> \"$CMD\" ${CMDARGS[*]}" >&2
     fi
     if [ ${#CMDARGS[@]} -eq 0 ]; then
-        "$POWERSHELL_EXE" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; param($Cmd) & $Cmd' -Cmd "$CMD" | ensure_utf8
+        "$POWERSHELL_EXE" -NoProfile -Command '& { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; & $args[0] }' "$CMD" | ensure_utf8
     else
-        "$POWERSHELL_EXE" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; param($Cmd, [string[]]$Args) & $Cmd @Args' -Cmd "$CMD" -Args "${CMDARGS[@]}" | ensure_utf8
+        "$POWERSHELL_EXE" -NoProfile -Command '& { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; & $args[0] $args[1..($args.Length-1)] }' "$CMD" "${CMDARGS[@]}" | ensure_utf8
     fi
 fi
