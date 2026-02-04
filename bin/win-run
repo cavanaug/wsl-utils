@@ -192,7 +192,7 @@ function ensure_utf8 {
 import sys
 import codecs
 
-CHUNK_SIZE = 512  # 8192
+CHUNK_SIZE = 256  # 8192
 
 def is_utf16le(peek_buffer):
     if len(peek_buffer) < 2:
@@ -215,7 +215,7 @@ def stream_utf16le_to_utf8(peek_buffer):
     while True:
         chunk = sys.stdin.buffer.read(CHUNK_SIZE)
         if not chunk:
-            final_text = decoder.decode(b'', True)
+            final_text = decoder.decode(b"", True)
             if final_text:
                 sys.stdout.buffer.write(encoder.encode(final_text, True))
             break

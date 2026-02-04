@@ -18,7 +18,7 @@ mkdir -p "${HOME}/.cache/wslutil"
 mkdir -p "${HOME}/.local/state/wslutil"
 
 # WSL2-specific environment variables and functions
-declare WIN_ENV_FILE="${HOME}/.cache/wslutil/env"
+declare -g -x WIN_ENV_FILE="${HOME}/.cache/wslutil/env"
 declare WIN_COMSPEC="/mnt/c/Windows/System32/cmd.exe"
 
 if [[ ! -f "${WIN_COMSPEC}" ]]; then
@@ -33,26 +33,26 @@ fi
 # WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
 # - Source ${WIN_ENV}.sh to gain access to these variables
 # - Any directories in these variables will be converted to WSL format
-build_win_env_sh() {
+wslutil_build_win_env() {
     local lockfile="${WIN_ENV_FILE}.lock"
     local temp_sh="${WIN_ENV_FILE}.sh.$$"
     local temp_win="${WIN_ENV_FILE}.win.$$"
-    
+
     # Try to acquire exclusive lock (non-blocking)
     # Returns immediately if another process holds the lock
-    exec 200>"${lockfile}"
+    exec 200> "${lockfile}"
     if ! flock -n 200; then
         # Another process is building - skip
         exec 200>&-
         return 1
     fi
-    
+
     # We have the lock - build the cache
-    ${WIN_COMSPEC} /c "set" 2>/dev/null | win-utf8 | \
-        sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' \
+    ${WIN_COMSPEC} /c "set" 2> /dev/null | win-utf8 \
+        | sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' \
             -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' \
             -e 's#\\#/#g' | sort > "${temp_win}"
-    
+
     declare line=""
     while IFS= read -r line; do
         declare key="${line%%=*}"
@@ -65,53 +65,49 @@ build_win_env_sh() {
         fi
         echo WIN_ENV[\'${key}\']=\""${value}\"" >> "${temp_sh}"
     done < "${temp_win}"
-    
+
     # Atomic rename (only successful if build completed)
     if [[ -f "${temp_sh}" ]] && [[ -f "${temp_win}" ]]; then
         mv -f "${temp_win}" "${WIN_ENV_FILE}.win"
         mv -f "${temp_sh}" "${WIN_ENV_FILE}.sh"
     fi
-    
+
     # Clean up temp files if they still exist
     rm -f "${temp_sh}" "${temp_win}"
-    
+
     # Release lock (fd 200 closes automatically, but explicit is clearer)
     exec 200>&-
 }
 
-# Wait for any in-progress build to complete
-wait_for_build_complete() {
-    local lockfile="${WIN_ENV_FILE}.lock"
-    
-    # Try to acquire lock with 5 second timeout
-    # If we get it, build is done; release immediately
-    exec 201>"${lockfile}"
-    if flock -w 5 201; then
-        exec 201>&-
-        return 0
-    else
-        exec 201>&-
-        return 1
-    fi
-}
-
+# WARN: This is useful only for the interactive shell, subshells wont have this.   Im not even sure this should be exported given that limitation.
 declare -g -A -x WIN_ENV
 
 # Initial cache check and build
 if [[ ! -f "${WIN_ENV_FILE}.sh" ]]; then
     # No cache exists - build it synchronously (foreground)
-    build_win_env_sh
+    wslutil_build_win_env
 else
     # Cache exists - check if it's stale (>1 hour old)
-    if [[ -n $(find "${WIN_ENV_FILE}.sh" -mmin +60 2>/dev/null) ]]; then
+    if [[ -n $(find "${WIN_ENV_FILE}.sh" -mmin +60 2> /dev/null) ]]; then
         # Stale cache - trigger background rebuild
         # Use subshell to avoid polluting current environment
-        (build_win_env_sh) &>/dev/null &
+        (wslutil_build_win_env) &> /dev/null &
     fi
 fi
 
 # Wait for any in-progress build to complete
-wait_for_build_complete
+local lockfile="${WIN_ENV_FILE}.lock"
+
+# Try to acquire lock with 5 second timeout
+# If we get it, build is done; release immediately
+exec 201> "${lockfile}"
+if flock -w 5 201; then
+    exec 201>&-
+else
+    exec 201>&-
+    echo_err "Error with lockfile"
+    return 1
+fi
 
 # Source the cache (guaranteed to exist and be complete now)
 if [[ -f "${WIN_ENV_FILE}.sh" ]]; then

@@ -42,6 +42,7 @@ done
 # BROWSER_ARGS="-NoProfile start"
 #
 # BROWSER=/mnt/c/Program\ Files/BraveSoftware/Brave-Browser/Application/brave.exe
+# BROWSER=%APPDATA%\BraveSoftware\Brave-Browser\Application
 #
 # -----------------------------------
 # Method 3 - Call the protocol handler via rundll32
