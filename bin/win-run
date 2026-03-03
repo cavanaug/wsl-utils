@@ -120,21 +120,27 @@ resolve_alias() {
     fi
 
     # Try to find alias in config files (user config takes precedence)
+    # Iterate all files; later entries overwrite earlier ones so user config wins
+    local resolved_path=""
     for config_file in "${config_files[@]}"; do
         if [[ -f "$config_file" ]]; then
             local alias_path
             alias_path=$(yq eval ".aliases.\"$cmd\".path // null" "$config_file" 2>/dev/null)
 
             if [[ "$alias_path" != "null" && -n "$alias_path" ]]; then
-                # Resolve environment variables in the path (restrict to safe variables)
-                alias_path=$(echo "$alias_path" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
-                # Convert to Windows path
-                alias_path=$(wslpath -w "$alias_path" 2>/dev/null || echo "$alias_path")
-                echo "$alias_path"
-                return
+                resolved_path="$alias_path"
             fi
         fi
     done
+
+    if [[ -n "$resolved_path" ]]; then
+        # Resolve environment variables in the path (restrict to safe variables)
+        resolved_path=$(echo "$resolved_path" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
+        # Convert to Windows path
+        resolved_path=$(wslpath -w "$resolved_path" 2>/dev/null || echo "$resolved_path")
+        echo "$resolved_path"
+        return
+    fi
 
     # No alias found, return original command
     echo "$cmd"
@@ -161,19 +167,24 @@ get_alias_options() {
     fi
 
     # Try to find alias options in config files (user config takes precedence)
+    # Iterate all files; later entries overwrite earlier ones so user config wins
+    local resolved_options=""
     for config_file in "${config_files[@]}"; do
         if [[ -f "$config_file" ]]; then
             local alias_options
             alias_options=$(yq eval ".aliases.\"$cmd\".options // null" "$config_file" 2>/dev/null)
 
             if [[ "$alias_options" != "null" && -n "$alias_options" ]]; then
-                # Resolve environment variables in the options (restrict to safe variables)
-                alias_options=$(echo "$alias_options" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
-                echo "$alias_options"
-                return
+                resolved_options="$alias_options"
             fi
         fi
     done
+
+    if [[ -n "$resolved_options" ]]; then
+        # Resolve environment variables in the options (restrict to safe variables)
+        resolved_options=$(echo "$resolved_options" | envsubst '${WIN_WINDIR} ${WIN_PROGRAMFILES} ${WIN_PROGRAMFILES_X86} ${WIN_USERPROFILE} ${WIN_LOCALAPPDATA} ${WIN_APPDATA}')
+        echo "$resolved_options"
+    fi
 }
 POWERSHELL_EXE="${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 
