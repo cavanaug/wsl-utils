@@ -13,6 +13,12 @@
 #   - This script is used to open files, directories, uri's in the default Windows browser from WSL
 #   - It is best used in conjunction with the xdg-utils package and registering as the xdg-open default web-browser
 #   - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windows paths.
+#   - It DOES NOT handle complex arguments typically needed for things like playwright-cli or agent-browser
+#     - Use dedicated win-chromium, win-brave, win-playwright custom scripts for that.
+#     - You dont want your normal windows browser running in debug mode as that is seurity risk!!
+#     - Every launch of the same browser.exe reuses the current running instance, which makes setting debug impossible.
+#     - The only way to do this is to launch the browser.exe with a different persistent profile which wont reuse the same instance.
+#     - The key problem is persistance, profile handling and enabling debug mode while getting the option parsing right on windows.
 set -euo pipefail
 
 # Set basic windows environment variables
