@@ -19,6 +19,42 @@
 #
 set -euo pipefail
 
+WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+
+is_wsl() {
+    [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]] && return 0
+    grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null
+}
+
+debug_log() {
+    local backend="$1"
+    local parent_cmd
+
+    if [[ -z "${WSLUTIL_DEBUG:-}" ]]; then
+        return 0
+    fi
+
+    mkdir -p "${HOME}/.local/state/wslutil"
+    parent_cmd="$(ps -p "${PPID}" -o cmd= 2>/dev/null | cut -f1 -d' ' || true)"
+    echo "$(date --rfc-3339=s) - ${backend} [$(basename -- "${parent_cmd}")] $(basename -- "${0}") ${*}" >>"${HOME}/.local/state/wslutil/win-clipboard.log"
+}
+
+emit_osc52() {
+    local input_file="$1"
+    local payload sequence
+
+    payload="$(base64 <"${input_file}" | tr -d '\r\n')"
+    sequence="$(printf '\033]52;c;%s\a' "${payload}")"
+
+    if [[ -n "${SSH_TTY:-}" && -w "${SSH_TTY}" ]]; then
+        printf '%s' "${sequence}" >"${SSH_TTY}"
+    elif [[ -w /dev/tty ]]; then
+        printf '%s' "${sequence}" >/dev/tty
+    else
+        printf '%s' "${sequence}"
+    fi
+}
+
 # Check for help option
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat << 'EOF'
@@ -28,11 +64,14 @@ USAGE:
     win-copy [OPTIONS]
 
 DESCRIPTION:
-    Reads content from stdin and copies it to the Windows clipboard.
-    Serves as a fallback for systems without WSLg support.
+    Reads content from stdin and copies it to the best available clipboard backend.
+    Works in WSL and non-WSL environments.
 
-    If WSLg is available and enabled, uses wl-copy for better integration.
-    Otherwise, uses Windows clip.exe command.
+    Backend order:
+    - WSL + WSLg: /usr/bin/wl-copy
+    - WSL fallback: Windows clip.exe
+    - Non-WSL + SSH: OSC52 escape sequence to terminal
+    - Non-WSL local: wl-copy, xclip, xsel, pbcopy
 
 OPTIONS:
     -h, --help    Show this help message and exit
@@ -51,24 +90,60 @@ EXAMPLES:
 
 NOTES:
     - Logs usage to ~/.local/state/wslutil/win-clipboard.log
-    - Primary fallback for non-WSLg environments
+    - Uses OSC52 over SSH when no WSL clipboard backend exists
     - Can be symlinked as wl-copy for compatibility
     - Only needed on older Windows 10 systems without WSLg
 EOF
     exit 0
 fi
 
-WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-copy ]]; then
-    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-        mkdir -p ${HOME}/.local/state/wslutil
-        echo "$(date --rfc-3339=s) - /usr/bin/wl-copy [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+input_file="$(mktemp)"
+trap 'rm -f "${input_file}"' EXIT
+cat >"${input_file}"
+
+if is_wsl; then
+    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-copy ]]; then
+        debug_log "/usr/bin/wl-copy (wslg)"
+        /usr/bin/wl-copy "$@" <"${input_file}"
+        exit $?
     fi
-    /usr/bin/wl-copy "$@"
-else
-    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-        mkdir -p ${HOME}/.local/state/wslutil
-        echo "$(date --rfc-3339=s) - win-copy script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+
+    if [[ -x "${WIN_WINDIR}/System32/clip.exe" ]]; then
+        debug_log "${WIN_WINDIR}/System32/clip.exe"
+        "${WIN_WINDIR}/System32/clip.exe" "$@" <"${input_file}"
+        exit $?
     fi
-    "${WIN_WINDIR}/System32/clip.exe" "$@"
 fi
+
+if [[ -z "${WSL_DISTRO_NAME:-}" && -z "${WSL_INTEROP:-}" && ( -n "${SSH_TTY:-}" || -n "${SSH_CONNECTION:-}" ) ]]; then
+    debug_log "osc52"
+    emit_osc52 "${input_file}"
+    exit $?
+fi
+
+if command -v wl-copy >/dev/null 2>&1; then
+    debug_log "wl-copy"
+    wl-copy "$@" <"${input_file}"
+    exit $?
+fi
+
+if command -v xclip >/dev/null 2>&1; then
+    debug_log "xclip"
+    xclip -selection clipboard <"${input_file}"
+    exit $?
+fi
+
+if command -v xsel >/dev/null 2>&1; then
+    debug_log "xsel"
+    xsel --clipboard --input <"${input_file}"
+    exit $?
+fi
+
+if command -v pbcopy >/dev/null 2>&1; then
+    debug_log "pbcopy"
+    pbcopy <"${input_file}"
+    exit $?
+fi
+
+echo "win-copy: no clipboard backend found (tried WSL clip.exe, wl-copy, xclip, xsel, pbcopy, and SSH OSC52)" >&2
+exit 1
