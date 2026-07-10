@@ -9,3 +9,4 @@ bin/wl-paste
 .claude/settings.local.json
 .claude
 .sidecar
+*~
