@@ -281,16 +281,38 @@ enabled = true"
     [[ "$output" =~ "skipping" ]]
 }
 
-# Test missing WIN_USERPROFILE handling
+# Test missing WIN_USERPROFILE handling when bootstrap cannot load shellenv
 @test "wslutil-setup handles missing WIN_USERPROFILE gracefully" {
     # Create minimal system config
     create_test_config "$XDG_CONFIG_HOME/wslutil/wsl.conf" "[interop]
 appendWindowsPath = false"
     
-    # Unset WIN_USERPROFILE
-    unset WIN_USERPROFILE
+    # Unset WIN_* so bootstrap runs
+    unset WIN_USERPROFILE WIN_WINDIR
     
     run "$WSLUTIL_SETUP" --system --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "WIN_USERPROFILE not set - skipping Windows config files" ]]
+    [[ "$output" =~ "Bootstrapping Windows environment variables" ]]
+    if is_wsl; then
+        [[ "$output" != *"WIN_USERPROFILE not set - skipping Windows config files"* ]]
+    else
+        [[ "$output" =~ "Could not bootstrap WIN_\* via shellenv" ]]
+        [[ "$output" =~ "WIN_USERPROFILE not set - skipping Windows config files" ]]
+    fi
+}
+
+# Test WIN_* bootstrap when shellenv was not loaded
+@test "wslutil-setup bootstraps WIN_* via shellenv when not preloaded" {
+    skip_if_not_wsl
+    skip_if_no_yq
+    
+    unset WIN_USERPROFILE WIN_WINDIR WIN_PROGRAMFILES WIN_PROGRAMFILES_X86
+    
+    # Use factory config (no user wslutil.yml) so WIN_USERPROFILE paths are exercised
+    rm -f "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    
+    run "$WSLUTIL_SETUP" --shims --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Bootstrapping Windows environment variables" ]]
+    [[ "$output" != *"Could not bootstrap WIN_* via shellenv"* ]]
 }

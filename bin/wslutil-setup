@@ -137,6 +137,27 @@ log_error() {
     echo -e "  ${RED}[ERROR]${NC} $1"
 }
 
+bootstrap_win_env_if_needed() {
+    if [[ -n "${WIN_USERPROFILE:-}" && -n "${WIN_WINDIR:-}" ]]; then
+        return 0
+    fi
+    log_info "Bootstrapping Windows environment variables"
+    local env_out
+    if ! env_out="$("$_wsu_bin/wslutil" shellenv 2>/dev/null)"; then
+        log_warning "Could not bootstrap WIN_* via shellenv; path expansions may be skipped"
+        return 0
+    fi
+    # shellcheck disable=SC1090
+    # shellenv sources WIN_ENV cache; disable nounset so partial keys do not abort setup
+    set +u
+    if ! eval "$env_out"; then
+        set -u
+        log_warning "Could not bootstrap WIN_* via shellenv; path expansions may be skipped"
+        return 0
+    fi
+    set -u
+}
+
 # Check if running in dry-run mode
 if [[ $DRY_RUN -eq 1 ]]; then
     log_info "Running in dry-run mode - no changes will be made"
@@ -504,6 +525,7 @@ process_system_config_directory() {
 }
 
 process_shims() {
+    bootstrap_win_env_if_needed
     local shim_config_file
     shim_config_file="$(select_shim_config_file)"
 
@@ -513,6 +535,7 @@ process_shims() {
 }
 
 process_system_configs() {
+    bootstrap_win_env_if_needed
     require_crudini
 
     # Phase 1: Process system/default configuration files

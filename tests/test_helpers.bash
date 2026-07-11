@@ -73,7 +73,7 @@ mock_wslpath() {
 
 # Check if running in WSL (for conditional tests)
 is_wsl() {
-    [[ -f /proc/version ]] && grep -q Microsoft /proc/version
+    [[ -f /proc/version ]] && grep -qi microsoft /proc/version
 }
 
 # Skip test if not in WSL
