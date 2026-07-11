@@ -13,13 +13,25 @@
 #
 set -euo pipefail
 
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "wslutil: path helper not found" >&2
+    exit 1
+fi
+WSLUTIL_DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+
 # Function to handle 'shellenv' subcommand
 shellenv_command() {
     # Add argument processing for 'shellenv' here
     SHELLENV=$(basename "$SHELL")
-    if [[ -f "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}" ]]; then
-        echo "WSLUTIL_DIR=${WSLUTIL_DIR}"
-        cat "${WSLUTIL_DIR}/env/shellenv.${SHELLENV}"
+    if [[ -f "${WSLUTIL_DATADIR}/env/shellenv.${SHELLENV}" ]]; then
+        cat "${WSLUTIL_DATADIR}/env/shellenv.${SHELLENV}"
     else
         echo "ERROR: Shellenv file not found for ${SHELLENV}" >&2
         exit 1
@@ -29,12 +41,17 @@ shellenv_command() {
 # Function to handle 'upgrade' subcommand
 upgrade_command() {
     echo "Updating WSL utility..."
+    if [[ ! -d "${WSLUTIL_DATADIR}/.git" ]]; then
+        echo "ERROR: Packaged installs cannot be upgraded with wslutil; use your package manager instead." >&2
+        exit 1
+    fi
+
     # Add argument processing for 'upgrade' here
     while [[ $# -gt 0 ]]; do
         case "$1" in
         --fetch)
             echo "Fetch but dont apply upgrades."
-            if ! (cd "$WSLUTIL_DIR" && git fetch); then
+            if ! (cd "$WSLUTIL_DATADIR" && git fetch); then
                 echo "ERROR: Failed to fetch updates from git repository" >&2
                 exit 1
             fi
@@ -47,15 +64,11 @@ upgrade_command() {
         esac
         shift
     done
-    if ! (cd "$WSLUTIL_DIR" && git pull); then
+    if ! (cd "$WSLUTIL_DATADIR" && git pull); then
         echo "ERROR: Failed to pull updates from git repository" >&2
         exit 1
     fi
 }
-
-# SHould make this a test if environment variable is set but doesnt match the the grandparent then error out.
-# WSLUTIL_DIR=${WSLUTIL_DIR:-${HOME}/.wslutil}
-WSLUTIL_DIR="$(dirname "$(dirname "$0")")"
 
 # Parse CLI arguments and dispatch to subcommands
 case "$1" in
@@ -94,9 +107,11 @@ upgrade)
     ;;
 --version)
     # Generate version in format: yr.mo.day (git hash)
-    if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
+    if [[ -f "${WSLUTIL_DATADIR}/VERSION" ]]; then
+        echo "wslutil $(< "${WSLUTIL_DATADIR}/VERSION")"
+    elif [[ -d "${WSLUTIL_DATADIR}/.git" ]]; then
         # Get HEAD commit date and hash from git
-        cd "${WSLUTIL_DIR}"
+        cd "${WSLUTIL_DATADIR}"
         commit_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
         commit_hash=$(git log -1 --format="%h" 2>/dev/null)
 
@@ -114,7 +129,7 @@ upgrade)
             echo "wslutil unknown${local_changes}"
         fi
     else
-        echo "wslutil unknown (not a git repository)"
+        echo "wslutil unknown"
     fi
     exit 0
     ;;
@@ -128,13 +143,13 @@ upgrade)
 
     # Handle external commands if they exist
     sub_command="$1"
-    local_command="${WSLUTIL_DIR}/bin/wslutil-$1"
+    local_command="${_wsu_bin}/wslutil-$1"
     shift
     if [[ -x "$local_command" ]]; then
         # Execute the command found in the wslutil bin directory
         "$local_command" "$@"
         exit $?
-    elif command -v "wslutil-$1" >/dev/null 2>&1; then
+    elif command -v "wslutil-${sub_command}" >/dev/null 2>&1; then
         # Execute the command found in the system PATH
         "wslutil-${sub_command}" "$@"
         exit $?

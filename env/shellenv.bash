@@ -4,9 +4,12 @@ if [[ ! -d $WIN_WINDIR ]]; then
     exit 1
 fi
 
-if [[ ! ":$PATH:" == *":${WSLUTIL_DIR}/bin:"* ]]; then
-    export PATH="${WSLUTIL_DIR}/bin:${PATH}"
+_wslutil_shimdir="${XDG_DATA_HOME:-$HOME/.local/share}/wslutil/bin"
+mkdir -p "$_wslutil_shimdir"
+if [[ ! ":$PATH:" == *":$_wslutil_shimdir:"* ]]; then
+    export PATH="${_wslutil_shimdir}:${PATH}"
 fi
+unset _wslutil_shimdir
 export WSL_INTEROP=${WSL_INTEROP:-/run/WSL/1_interop}
 if test ! -S ${WSL_INTEROP}; then
     echo "ERROR: WSL_INTEROP is not configured properly" >&2
