@@ -82,8 +82,8 @@ shellenv)
     ;;
 upgrade)
     if [[ $# -gt 1 && "$2" == "--help" ]]; then
-        echo "Usage: $(basename "$0") upgrade [--check]"
-        echo "  --check    Check for upgrades"
+        echo "Usage: $(basename "$0") upgrade [--fetch]"
+        echo "  --fetch    Fetch but don't apply upgrades"
         exit 0
     fi
     shift
