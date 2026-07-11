@@ -8,7 +8,6 @@ This document provides comprehensive information about wsl-utils configuration, 
 
 **Core System Variables:**
 
-* `WSLUTIL_DIR` - Installation directory (auto-detected from script location)
 * `WSL_INTEROP` - WSL interop socket path (default: `/run/WSL/1_interop`)
 
 **Windows Environment Variables:**
@@ -31,15 +30,15 @@ This document provides comprehensive information about wsl-utils configuration, 
 
 **Configuration File Locations:**
 
-1. **System Configuration:** `${WSLUTIL_DIR}/config/`
+1. **Factory Configuration:** Resolved from the command location: `${PREFIX}/share/wslutil/config/` for `make install`, or `config/` in a checkout.
 2. **User Configuration:** `${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/`
 
 **Supported Configuration Files:**
 
-* `conf.yml` - Windows executable configuration for `wslutil setup`
+* `wslutil.yml` - Windows executable configuration for `wslutil setup`
 * `win-run.yml` - Aliases for `win-run` command
 
-#### Windows Executable Configuration (conf.yml)
+#### Windows Executable Configuration (wslutil.yml)
 
 Controls which Windows executables get symlinked by `wslutil setup`:
 
@@ -79,7 +78,7 @@ aliases:
 **Usage Example:**
 ```bash
 # Using custom config file
-wslutil setup -c ~/.config/wslutil/conf.yml
+wslutil setup --shims -c ~/.config/wslutil/wslutil.yml
 
 # Win-run will automatically resolve aliases
 win-run brave.exe https://example.com

@@ -10,18 +10,14 @@ A collection of command-line utilities designed to simplify and enhance the inte
 curl -fsSL https://raw.githubusercontent.com/cavanaug/wsl-utils/main/install.sh | sh
 ```
 
-**Verify installation:**
+**Finish setup:**
 
 ```bash
+export PATH="$HOME/.local/bin:$PATH"  # if ~/.local/bin is not already on PATH
 wslutil --help
-wslutil doctor    # Check system health
-```
-
-**Set up environment:**
-
-```bash
 eval "$(wslutil shellenv)"    # Load Windows integration
-wslutil setup                 # Configure Windows executable symlinks
+wslutil setup --shims         # Configure Windows executable shims
+wslutil doctor                # Check system health
 ```
 
 ## Overview
@@ -48,7 +44,7 @@ wslutil setup                 # Configure Windows executable symlinks
 |---------|---------|
 | `wslutil doctor` | Run comprehensive health checks |
 | `wslutil shellenv` | Output shell environment setup commands |
-| `wslutil setup` | Configure system and create Windows executable symlinks |
+| `wslutil setup` | Configure system and create Windows executable shims |
 | `wslutil upgrade` | Update wsl-utils via git pull |
 | `wslutil uptime` | Show WSL distribution uptime (not VM uptime) |
 
@@ -57,7 +53,7 @@ wslutil setup                 # Configure Windows executable symlinks
 ```bash
 wslutil doctor                    # Check system health
 eval "$(wslutil shellenv)"        # Set up environment
-wslutil setup                     # Create Windows exe symlinks
+wslutil setup --shims             # Create Windows exe shims
 wslutil uptime                    # Show WSL distro uptime
 ```
 
@@ -111,6 +107,9 @@ echo "Linux text" | win-copy      # Works seamlessly with Linux text
 ```bash
 # Basic installation
 curl -fsSL https://raw.githubusercontent.com/cavanaug/wsl-utils/main/install.sh | sh
+
+# Or from an existing checkout
+make install PREFIX="$HOME/.local"
 ```
 
 ### Manual Installation
@@ -119,11 +118,17 @@ curl -fsSL https://raw.githubusercontent.com/cavanaug/wsl-utils/main/install.sh 
 # Clone repository
 git clone https://github.com/cavanaug/wsl-utils.git ~/.wslutil
 
-# Add to PATH
-echo 'export PATH="$PATH:$HOME/.wslutil/bin"' >> ~/.bashrc
+# Install scripts and shared data
+make -C ~/.wslutil install PREFIX="$HOME/.local"
+
+# Ensure installed commands are on PATH
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 # Set up environment integration
 echo 'if command -v wslutil >/dev/null 2>&1; then eval "$(wslutil shellenv)"; fi' >> ~/.bashrc
+
+# Create Windows executable shims
+PATH="$HOME/.local/bin:$PATH" wslutil setup --shims
 
 # Reload shell
 source ~/.bashrc
@@ -135,7 +140,7 @@ source ~/.bashrc
 
 ```bash
 wslutil doctor                    # Health check
-wslutil setup                     # Configure system
+wslutil setup --shims             # Configure Windows executable shims
 win-run <windows-exe> [args]      # Run Windows programs
 win-open <path>                   # Open in Explorer
 ```
@@ -165,7 +170,7 @@ wslutil uptime --since            # Show when WSL distro started
 
 - 📖 **[Detailed Documentation](DETAILS.md)** - Comprehensive configuration, advanced usage, and troubleshooting
 - 🔧 **Run `wslutil doctor`** to verify your setup
-- ⚙️ **Run `wslutil setup`** to configure Windows executable symlinks and environment configuation
+- ⚙️ **Run `wslutil setup --shims`** to configure Windows executable shims
 - 🧪 **Test integration** with `win-run notepad.exe` or `win-open .`
 
 ## Support

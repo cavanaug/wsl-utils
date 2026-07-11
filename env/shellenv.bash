@@ -99,7 +99,7 @@ else
 fi
 
 # Wait for any in-progress build to complete
-local lockfile="${WIN_ENV_FILE}.lock"
+declare lockfile="${WIN_ENV_FILE}.lock"
 
 # Try to acquire lock with 5 second timeout
 # If we get it, build is done; release immediately

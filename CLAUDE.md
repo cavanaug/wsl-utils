@@ -33,7 +33,7 @@ This is `wsl-utils`, a collection of command-line utilities that simplify intero
 - **Subcommands**: Individual `wslutil-*` scripts (e.g., `wslutil-doctor`, `wslutil-setup`) that implement specific functionality
 - **Windows Integration Helpers**: `win-*` scripts that provide direct integration with Windows features
 - **Environment Setup**: Shell environment configuration via `env/shellenv.*` files
-- **Configuration**: YAML-based configuration in `conf.yml` for Windows executable symlink creation
+- **Configuration**: YAML-based configuration in `config/wslutil.yml` for Windows executable shim creation
 
 ### Key Scripts
 
@@ -49,8 +49,9 @@ This is `wsl-utils`, a collection of command-line utilities that simplify intero
 ### Environment Variables
 
 **Core System Variables:**
-- `WSLUTIL_DIR`: Installation directory (auto-detected from script location)
 - `WSL_INTEROP`: WSL interop socket path (default: `/run/WSL/1_interop`)
+
+Factory data is resolved from the command location: `${PREFIX}/share/wslutil` for `make install`, or the repository root when running from a checkout.
 
 **Windows Environment Variables (set by `wslutil shellenv`):**
 - `WIN_USERPROFILE`: Windows user profile path (converted to WSL format)
@@ -116,7 +117,7 @@ wslutil uptime               # Show WSL distribution uptime (not VM uptime)
 The `win-run` script automatically converts WSL paths to Windows format for any arguments that are existing files or directories using `wslpath -w`.
 
 ### Configuration Format
-The `conf.yml` file defines Windows executables for symlink creation by `wslutil setup`, categorized as:
+The `config/wslutil.yml` file defines Windows executables for shim creation by `wslutil setup`, categorized as:
 - Direct links (no argument processing)
 - Shims (processed through `win-run` for path conversion)
 

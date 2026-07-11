@@ -1,13 +1,12 @@
 #!/bin/sh
 #
-# wsl-utils installation script
-# This script automates the installation steps described in the README.md
+# wsl-utils installation wrapper
 # Compatible with POSIX sh - no bash-specific features
-#
 
 set -eu
 
-# Logging functions (no colors for maximum compatibility)
+DEFAULT_REPO_URL="https://github.com/cavanaug/wsl-utils.git"
+
 log_info() {
     echo "[INFO] $1"
 }
@@ -21,76 +20,102 @@ log_warning() {
 }
 
 log_error() {
-    echo "[ERROR] $1"
+    echo "[ERROR] $1" >&2
 }
-
-# Hardcoded repository URL
-DEFAULT_REPO_URL="https://github.com/cavanaug/wsl-utils.git"
 
 show_help() {
     cat <<EOF
 Usage: $0 [OPTIONS] [REPOSITORY_URL]
 
-Install wsl-utils from git repository to ~/.wslutil and set up shell integration.
+Install wsl-utils with make install.
 
 Arguments:
-  REPOSITORY_URL    Git repository URL (default: $DEFAULT_REPO_URL)
+  REPOSITORY_URL       Git repository URL (default: $DEFAULT_REPO_URL)
 
 Options:
-  --install-dir DIR    Install to custom directory (default: ~/.wslutil)
-  --no-path           Skip adding to PATH
-  --no-shellenv       Skip shell environment setup
-  --shell SHELL       Target specific shell (currently only bash is supported)
-  --dry-run           Show what would be done without making changes
-  --help              Show this help message
+  --prefix DIR         Install prefix (default: \${PREFIX:-\$HOME/.local})
+  --install-dir DIR    Back-compatible alias for --prefix
+  --source-dir DIR     Source checkout directory (default: \${WSLUTIL_SOURCE_DIR:-\$HOME/.wslutil})
+  --dry-run            Show what would be done without making changes
+  --help               Show this help message
+
+Deprecated no-op options accepted for older install commands:
+  --no-path, --no-shellenv, --shell SHELL
 
 Examples:
-  $0                                          # Install from default repository
-  $0 --no-path                               # Skip PATH setup
-  $0 --shell bash --dry-run                  # Preview bash setup
-  $0 https://github.com/user/fork.git       # Install from custom fork
-
-If no repository URL is provided, uses the default repository.
-If installation directory exists, will attempt to update or configure it.
+  $0
+  $0 --prefix "$HOME/.local"
+  $0 --source-dir "$HOME/src/wsl-utils" --prefix /tmp/wsu
+  $0 https://github.com/user/fork.git
 EOF
 }
 
-# Parse command line arguments
-INSTALL_DIR="$HOME/.wslutil"
+detect_script_dir() {
+    case "$0" in
+    */*)
+        dir=$(CDPATH= cd "$(dirname "$0")" 2>/dev/null && pwd) || return 1
+        if [ -f "$dir/Makefile" ] && [ -d "$dir/bin" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        ;;
+    esac
+    return 1
+}
+
+PREFIX="${PREFIX:-${INSTALL_DIR:-$HOME/.local}}"
+SOURCE_DIR="${WSLUTIL_SOURCE_DIR:-}"
+SOURCE_FROM_SCRIPT="false"
 REPOSITORY_URL=""
-SETUP_PATH="true"
-SETUP_SHELLENV="true"
-TARGET_SHELL=""
 DRY_RUN="false"
 
+if [ -z "$SOURCE_DIR" ]; then
+    SOURCE_DIR=$(detect_script_dir || true)
+    if [ -n "$SOURCE_DIR" ]; then
+        SOURCE_FROM_SCRIPT="true"
+    fi
+fi
+if [ -z "$SOURCE_DIR" ]; then
+    SOURCE_DIR="$HOME/.wslutil"
+fi
+
 while [ $# -gt 0 ]; do
-    case $1 in
+    case "$1" in
+    --prefix)
+        if [ -z "${2:-}" ]; then
+            log_error "--prefix option requires a directory argument"
+            exit 1
+        fi
+        PREFIX="$2"
+        shift 2
+        ;;
     --install-dir)
         if [ -z "${2:-}" ]; then
             log_error "--install-dir option requires a directory argument"
             exit 1
         fi
-        INSTALL_DIR="$2"
+        PREFIX="$2"
         shift 2
         ;;
-    --no-path)
-        SETUP_PATH="false"
-        shift
+    --source-dir)
+        if [ -z "${2:-}" ]; then
+            log_error "--source-dir option requires a directory argument"
+            exit 1
+        fi
+        SOURCE_DIR="$2"
+        SOURCE_FROM_SCRIPT="false"
+        shift 2
         ;;
-    --no-shellenv)
-        SETUP_SHELLENV="false"
+    --no-path | --no-shellenv)
+        log_warning "$1 is no longer needed; install.sh does not edit shell startup files"
         shift
         ;;
     --shell)
         if [ -z "${2:-}" ]; then
-            log_error "--shell option requires a shell name (currently only bash is supported)"
+            log_error "--shell option requires a shell name"
             exit 1
         fi
-        if [ "$2" != "bash" ]; then
-            log_error "Only bash is currently supported. Found: $2"
-            exit 1
-        fi
-        TARGET_SHELL="$2"
+        log_warning "--shell is no longer needed; install.sh does not edit shell startup files"
         shift 2
         ;;
     --dry-run)
@@ -107,182 +132,65 @@ while [ $# -gt 0 ]; do
         exit 1
         ;;
     *)
-        # First non-option argument is the repository URL
         if [ -z "$REPOSITORY_URL" ]; then
             REPOSITORY_URL="$1"
+            shift
         else
             log_error "Unexpected argument: $1"
             exit 1
         fi
-        shift
         ;;
     esac
 done
 
-# Check if running in WSL
-if [ -z "${WSL_DISTRO_NAME:-}" ]; then
-    log_warning "This script is designed for WSL environments"
-    log_warning "Some features may not work correctly outside of WSL"
-fi
-
-# Detect current shell if not specified (only bash is supported)
-if [ -z "$TARGET_SHELL" ]; then
-    case "$SHELL" in
-        */bash)
-            TARGET_SHELL="bash"
-            ;;
-        *)
-            TARGET_SHELL="bash"
-            log_warning "Only bash is currently supported. Shell $SHELL detected, using bash configuration"
-            ;;
-    esac
-fi
-
-log_info "wsl-utils Installation Script"
-log_info "============================="
-log_info "Install directory: $INSTALL_DIR"
-log_info "Target shell: $TARGET_SHELL"
-log_info "Setup PATH: $SETUP_PATH"
-log_info "Setup shell environment: $SETUP_SHELLENV"
-log_info "Dry run: $DRY_RUN"
-
-if [ "$DRY_RUN" = "true" ]; then
-    log_info "Running in dry-run mode - no changes will be made"
-fi
-
-echo
-
-# Set default repository URL if none provided
 if [ -z "$REPOSITORY_URL" ]; then
     REPOSITORY_URL="$DEFAULT_REPO_URL"
 fi
 
-# Step 1: Clone repository (if URL provided and directory doesn't exist)
-if [ -n "$REPOSITORY_URL" ]; then
-    if [ -d "$INSTALL_DIR" ]; then
-        log_warning "Directory $INSTALL_DIR already exists"
-        log_info "Checking if it's a git repository..."
-        
-        if [ -d "$INSTALL_DIR/.git" ]; then
-            log_info "Existing git repository found, updating..."
-            if [ "$DRY_RUN" = "false" ]; then
-                cd "$INSTALL_DIR"
-                git pull
-                log_success "Repository updated"
-            else
-                log_info "[DRY-RUN] Would update existing repository"
-            fi
-        else
-            log_error "Directory exists but is not a git repository"
-            log_error "Please remove $INSTALL_DIR or choose a different directory"
+log_info "wsl-utils installer"
+log_info "Source directory: $SOURCE_DIR"
+log_info "Install prefix: $PREFIX"
+log_info "Repository URL: $REPOSITORY_URL"
+log_info "Dry run: $DRY_RUN"
+echo
+
+if [ "$DRY_RUN" = "true" ]; then
+    if [ -d "$SOURCE_DIR/.git" ] && [ "$SOURCE_FROM_SCRIPT" = "false" ]; then
+        log_info "[DRY-RUN] Would update existing checkout: git -C \"$SOURCE_DIR\" pull"
+    elif [ -e "$SOURCE_DIR" ]; then
+        log_info "[DRY-RUN] Would use existing source directory: $SOURCE_DIR"
+    else
+        log_info "[DRY-RUN] Would clone: git clone \"$REPOSITORY_URL\" \"$SOURCE_DIR\""
+    fi
+    log_info "[DRY-RUN] Would install: make -C \"$SOURCE_DIR\" install PREFIX=\"$PREFIX\""
+else
+    if [ -d "$SOURCE_DIR/.git" ] && [ "$SOURCE_FROM_SCRIPT" = "false" ]; then
+        log_info "Updating existing checkout..."
+        git -C "$SOURCE_DIR" pull
+    elif [ -e "$SOURCE_DIR" ]; then
+        if [ ! -f "$SOURCE_DIR/Makefile" ] || [ ! -d "$SOURCE_DIR/bin" ]; then
+            log_error "$SOURCE_DIR exists but does not look like a wsl-utils source checkout"
             exit 1
         fi
+        log_info "Using existing source directory"
     else
-        log_info "Cloning repository to $INSTALL_DIR..."
-        if [ "$DRY_RUN" = "false" ]; then
-            git clone "$REPOSITORY_URL" "$INSTALL_DIR"
-            log_success "Repository cloned successfully"
-        else
-            log_info "[DRY-RUN] Would clone $REPOSITORY_URL to $INSTALL_DIR"
-        fi
+        log_info "Cloning repository..."
+        git clone "$REPOSITORY_URL" "$SOURCE_DIR"
     fi
-elif [ ! -d "$INSTALL_DIR" ]; then
-    log_error "No repository URL provided and $INSTALL_DIR does not exist"
-    log_error "Please provide a repository URL or ensure wsl-utils is already installed"
-    exit 1
+
+    log_info "Installing with make..."
+    make -C "$SOURCE_DIR" install PREFIX="$PREFIX"
+    log_success "Installation completed successfully!"
 fi
 
-# Verify installation directory contains expected files
-if [ "$DRY_RUN" = "false" ] && [ ! -f "$INSTALL_DIR/bin/wslutil" ]; then
-    log_error "Installation directory does not contain expected wslutil binary"
-    log_error "Please check that $INSTALL_DIR contains a valid wsl-utils installation"
-    exit 1
-fi
+cat <<EOF
 
-# Step 2: Add to PATH (if requested)
-if [ "$SETUP_PATH" = "true" ]; then
-    # Only bash is supported
-    SHELL_CONFIG="$HOME/.bashrc"
-    PATH_LINE="export PATH=\"$INSTALL_DIR/bin:\$PATH\""
-
-    log_info "Setting up PATH in $SHELL_CONFIG..."
-
-    # Check if PATH is already set up
-    if [ -f "$SHELL_CONFIG" ] && grep -q "$INSTALL_DIR/bin" "$SHELL_CONFIG"; then
-        log_info "PATH already configured in $SHELL_CONFIG"
-    else
-        log_info "Adding $INSTALL_DIR/bin to PATH..."
-        if [ "$DRY_RUN" = "false" ]; then
-            # Create config file if it doesn't exist
-            if [ ! -f "$SHELL_CONFIG" ]; then
-                mkdir -p "$(dirname "$SHELL_CONFIG")"
-                touch "$SHELL_CONFIG"
-            fi
-
-            # Add PATH line
-            echo "" >> "$SHELL_CONFIG"
-            echo "# Added by wsl-utils installer" >> "$SHELL_CONFIG"
-            echo "$PATH_LINE" >> "$SHELL_CONFIG"
-            log_success "PATH configured in $SHELL_CONFIG"
-        else
-            log_info "[DRY-RUN] Would add PATH line to $SHELL_CONFIG"
-        fi
-    fi
-fi
-
-# Step 3: Set up shell environment (if requested)
-if [ "$SETUP_SHELLENV" = "true" ]; then
-    # Only bash is supported
-    SHELL_CONFIG="$HOME/.bashrc"
-    SHELLENV_BLOCK='# Load wslutil environment variables if wslutil is available
-if command -v wslutil >/dev/null 2>&1; then
-  eval "$(wslutil shellenv)"
-fi'
-
-    log_info "Setting up shell environment in $SHELL_CONFIG..."
-
-    # Check if shell environment is already set up
-    if [ -f "$SHELL_CONFIG" ] && grep -q "wslutil shellenv" "$SHELL_CONFIG"; then
-        log_info "Shell environment already configured in $SHELL_CONFIG"
-    else
-        log_info "Adding shell environment setup..."
-        if [ "$DRY_RUN" = "false" ]; then
-            # Create config file if it doesn't exist
-            if [ ! -f "$SHELL_CONFIG" ]; then
-                mkdir -p "$(dirname "$SHELL_CONFIG")"
-                touch "$SHELL_CONFIG"
-            fi
-
-            # Add shell environment block
-            echo "" >> "$SHELL_CONFIG"
-            echo "# Added by wsl-utils installer" >> "$SHELL_CONFIG"
-            echo "$SHELLENV_BLOCK" >> "$SHELL_CONFIG"
-            log_success "Shell environment configured in $SHELL_CONFIG"
-        else
-            log_info "[DRY-RUN] Would add shell environment setup to $SHELL_CONFIG"
-        fi
-    fi
-fi
-
-# Final steps
-echo
-log_success "Installation completed successfully!"
-
-if [ "$DRY_RUN" = "false" ]; then
-    echo
-    log_info "Next steps:"
-    log_info "1. Restart your terminal or run: source $SHELL_CONFIG"
-    log_info "2. Verify installation: wslutil --help"
-    log_info "3. Run health check: wslutil doctor"
-    log_info "4. Configure symlinks: wslutil setup"
-
-    # Test if wslutil is accessible
-    if command -v "$INSTALL_DIR/bin/wslutil" >/dev/null 2>&1; then
-        echo
-        log_success "wslutil is ready to use!"
-        log_info "Try running: $INSTALL_DIR/bin/wslutil --help"
-    fi
-else
-    echo
-    log_info "Dry run completed. Run without --dry-run to perform installation."
-fi
+Next steps:
+  1. Ensure $PREFIX/bin is on your PATH.
+  2. Load Windows integration in your shell:
+       eval "\$(wslutil shellenv)"
+  3. Create Windows executable shims:
+       wslutil setup --shims
+  4. Verify your setup:
+       wslutil doctor
+EOF
