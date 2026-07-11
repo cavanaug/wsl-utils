@@ -25,7 +25,7 @@ aliases:
 EOF
     
     # Test basic alias resolution
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 5 bin/win-run -c '$config_file' test-echo 'Hello World' || true"
+    run bash -c "timeout 5 win-run -c '$config_file' test-echo 'Hello World' || true"
     
     # Should not have config errors
     [[ ! "$output" =~ "Error:" ]]
@@ -45,7 +45,7 @@ EOF
     
     # Test environment variable expansion
     export CUSTOM_CONFIG="$config_file"
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     # Test basic environment expansion
     run resolve_alias "env-test"
@@ -60,7 +60,7 @@ EOF
 
 @test "integration: config hierarchy precedence" {
     # Create global config
-    local global_config="$WSLUTIL_DIR/config/win-run.yml"
+    local global_config="$CHECKOUT_ROOT/config/win-run.yml"
     local global_backup=""
     if [[ -f "$global_config" ]]; then
         global_backup=$(mktemp)
@@ -83,7 +83,7 @@ aliases:
     options: "user"
 EOF
     
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     # User config should take precedence
     run resolve_alias "hierarchy-test"
@@ -103,7 +103,7 @@ EOF
 }
 
 @test "integration: help system is comprehensive" {
-    run "$WSLUTIL_DIR/bin/win-run" --help
+    run win-run --help
     [ "$status" -eq 0 ]
     
     # Check that help contains all major sections
@@ -129,23 +129,23 @@ EOF
     # Test various error conditions produce helpful messages
     
     # Missing command
-    run "$WSLUTIL_DIR/bin/win-run"
+    run win-run
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error: No command specified" ]]
     
     # Invalid option
-    run "$WSLUTIL_DIR/bin/win-run" --invalid
+    run win-run --invalid
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error: Unknown option" ]]
     [[ "$output" =~ "Use --help for usage information" ]]
     
     # Missing config file argument
-    run "$WSLUTIL_DIR/bin/win-run" -c
+    run win-run -c
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error: -c option requires a config file argument" ]]
     
     # Non-existent config file
-    run "$WSLUTIL_DIR/bin/win-run" -c "/does/not/exist.yml" test
+    run win-run -c "/does/not/exist.yml" test
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error: Config file '/does/not/exist.yml' does not exist" ]]
 }
@@ -159,7 +159,8 @@ EOF
     rm -f "$log_file"
     
     # Run command that should create log entry
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run -c '$config_file' testcmd || true"
+    export WSLUTIL_DEBUG=1
+    run bash -c "timeout 2 win-run -c '$config_file' testcmd || true"
     
     # Check that log file was created and contains expected entry
     [ -f "$log_file" ]

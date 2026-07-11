@@ -13,7 +13,7 @@ teardown() {
 
 @test "resolve_alias returns original command when no config" {
     # Test resolve_alias function directly by sourcing it
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run resolve_alias "nonexistent-command"
     [ "$status" -eq 0 ]
@@ -26,7 +26,7 @@ teardown() {
     create_test_alias_config "$user_config"
     
     # Source the win-run script to get access to functions
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run resolve_alias "testcmd"
     [ "$status" -eq 0 ]
@@ -46,7 +46,7 @@ EOF
     
     # Set custom config and source script
     export CUSTOM_CONFIG="$config_file"
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run resolve_alias "envtest"
     [ "$status" -eq 0 ]
@@ -57,7 +57,7 @@ EOF
     local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
     create_test_alias_config "$user_config"
     
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run get_alias_options "testcmd-with-opts"
     [ "$status" -eq 0 ]
@@ -68,7 +68,7 @@ EOF
     local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
     create_test_alias_config "$user_config"
     
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run get_alias_options "testcmd"
     [ "$status" -eq 0 ]
@@ -79,7 +79,7 @@ EOF
     local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
     create_test_alias_config "$user_config"
     
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run get_alias_options "nonexistent"
     [ "$status" -eq 0 ]
@@ -106,7 +106,7 @@ aliases:
 EOF
     
     export CUSTOM_CONFIG="$custom_config"
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run resolve_alias "testcmd"
     [ "$status" -eq 0 ]
@@ -125,7 +125,7 @@ aliases:
 EOF
     
     export CUSTOM_CONFIG="$config_file"
-    source "$WSLUTIL_DIR/bin/win-run"
+    source "$CHECKOUT_ROOT/bin/win-run"
     
     run resolve_alias "complex-path"
     [ "$status" -eq 0 ]

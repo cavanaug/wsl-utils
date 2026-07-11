@@ -7,7 +7,7 @@ setup() {
     TEST_DIR="${BATS_TMPDIR}/wslutil_security_test_$$"
     mkdir -p "$TEST_DIR"
     export HOME="$TEST_DIR"
-    export WSLUTIL_DIR="$(cd "$(dirname "$BATS_TEST_DIRNAME")" && pwd)"
+    export CHECKOUT_ROOT="$(cd "$(dirname "$BATS_TEST_DIRNAME")" && pwd)"
 }
 
 teardown() {
@@ -36,7 +36,7 @@ EOF
 
     export WIN_PROGRAMFILES="/mnt/c/Program Files"
     
-    run bash -c "source '$WSLUTIL_DIR/bin/win-run' && get_alias_path 'test'"
+    run bash -c "source '$CHECKOUT_ROOT/bin/win-run' && get_alias_path 'test'"
     
     assert_success
     [[ "$output" == *"Program Files"* ]]
@@ -54,7 +54,7 @@ EOF
 
     export MALICIOUS_VAR="/etc/passwd"
     
-    run bash -c "source '$WSLUTIL_DIR/bin/win-run' && get_alias_path 'malicious'"
+    run bash -c "source '$CHECKOUT_ROOT/bin/win-run' && get_alias_path 'malicious'"
     
     assert_success
     [[ "$output" != *"passwd"* ]]
@@ -73,7 +73,7 @@ winexe:
   - "${MALICIOUS_VAR}/bad.exe"
 EOF
 
-    run bash -c "cd '$WSLUTIL_DIR/bin' && source wslutil-setup && echo 'test' | envsubst '\${WIN_PROGRAMFILES}'"
+    run bash -c "cd '$CHECKOUT_ROOT/bin' && source wslutil-setup && echo 'test' | envsubst '\${WIN_PROGRAMFILES}'"
     
     assert_success
 }
@@ -89,7 +89,7 @@ EOF
 
     export WIN_ENV_FILE="$cache_dir/win-env"
     
-    run bash -c "source '$WSLUTIL_DIR/env/shellenv.bash' 2>&1 || true"
+    run bash -c "source '$CHECKOUT_ROOT/env/shellenv.bash' 2>&1 || true"
     
     [[ "$output" == *"suspicious content"* ]]
 }
@@ -107,7 +107,7 @@ EOF
 
     export WIN_ENV_FILE="$cache_dir/win-env"
     
-    run bash -c "source '$WSLUTIL_DIR/env/shellenv.bash' 2>&1"
+    run bash -c "source '$CHECKOUT_ROOT/env/shellenv.bash' 2>&1"
     
     refute_output --partial "suspicious content"
 }
@@ -124,7 +124,7 @@ EOF
 
     export WIN_ENV_FILE="$cache_dir/win-env"
     
-    run bash -c "source '$WSLUTIL_DIR/env/shellenv.bash' 2>&1 || true"
+    run bash -c "source '$CHECKOUT_ROOT/env/shellenv.bash' 2>&1 || true"
     
     [[ "$output" == *"suspicious content"* ]]
     [[ ! -f "$cache_dir/win-env.sh" ]]
@@ -143,7 +143,7 @@ EOF
 
     export WIN_ENV_FILE="$cache_dir/win-env"
     
-    run bash -c "source '$WSLUTIL_DIR/env/shellenv.bash' 2>&1 || true"
+    run bash -c "source '$CHECKOUT_ROOT/env/shellenv.bash' 2>&1 || true"
     
     [[ "$output" == *"suspicious content"* ]]
     [[ ! -f "$cache_dir/win-env.sh" ]]

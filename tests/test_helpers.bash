@@ -4,7 +4,9 @@
 
 # Setup test environment
 setup_test_env() {
-    export WSLUTIL_DIR="$BATS_TEST_DIRNAME/.."
+    CHECKOUT_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+    export CHECKOUT_ROOT
+    export PATH="$CHECKOUT_ROOT/bin:$PATH"
     export BATS_TMPDIR="${BATS_TMPDIR:-/tmp}"
     export TEST_TEMP_DIR="$BATS_TMPDIR/wsl-utils-test-$$"
     mkdir -p "$TEST_TEMP_DIR"

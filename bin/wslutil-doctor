@@ -13,6 +13,19 @@
 # wslutil-doctor - Diagnose the health of wslutil's environment
 set -euo pipefail
 
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "wslutil-doctor: path helper not found" >&2
+    exit 1
+fi
+WSLUTIL_DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+
 show_help() {
     cat <<EOF
 Usage: wslutil-doctor [OPTIONS]
@@ -480,9 +493,8 @@ fi
 printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "WSL-Utils Version Info"
 
 # Get local version
-WSLUTIL_DIR="$(dirname $(dirname "$0"))"
-if [[ -d "${WSLUTIL_DIR}/.git" ]]; then
-    cd "${WSLUTIL_DIR}"
+if [[ -d "${WSLUTIL_DATADIR}/.git" ]]; then
+    cd "${WSLUTIL_DATADIR}"
     local_date=$(git log -1 --format="%cd" --date=format:"%Y.%m.%d" 2>/dev/null)
     local_hash=$(git log -1 --format="%h" 2>/dev/null)
 

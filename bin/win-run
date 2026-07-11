@@ -18,6 +18,20 @@
 #
 set -euo pipefail
 
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "win-run: path helper not found" >&2
+    exit 1
+fi
+DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+CUSTOM_CONFIG="${CUSTOM_CONFIG:-}"
+
 # Set up environment variables for alias resolution
 export WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 export WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-/mnt/c/Program\ Files}
@@ -52,8 +66,8 @@ OPTIONS
 CONFIGURATION
     Aliases are loaded from configuration files in YAML format:
 
-    Default hierarchy (global → user):
-    • ${WSLUTIL_DIR}/config/win-run.yml
+    Default hierarchy (factory → user):
+    • <datadir>/config/win-run.yml
     • ~/.config/wslutil/win-run.yml
 
     Config file format:
@@ -93,6 +107,10 @@ OUTPUT PROCESSING
     By default, win-run processes PowerShell output to ensure UTF-8 encoding
     and Unix line endings. Use --raw to bypass this for direct unmodified output.
 
+ENVIRONMENT
+    Alias paths and options may reference: WIN_WINDIR, WIN_PROGRAMFILES,
+    WIN_PROGRAMFILES_X86, WIN_USERPROFILE, WIN_LOCALAPPDATA, WIN_APPDATA.
+
 SEE ALSO
     wslutil(1), wslutil-doctor(1), win-open(1), win-browser(1)
 EOF
@@ -108,7 +126,7 @@ resolve_alias() {
         config_files=("$CUSTOM_CONFIG")
     else
         config_files=(
-            "${WSLUTIL_DIR:-$(dirname "$(dirname "$0")")}/config/win-run.yml"
+            "$DATADIR/config/win-run.yml"
             "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/win-run.yml"
         )
     fi
@@ -156,7 +174,7 @@ get_alias_options() {
         config_files=("$CUSTOM_CONFIG")
     else
         config_files=(
-            "${WSLUTIL_DIR:-$(dirname "$(dirname "$0")")}/config/win-run.yml"
+            "$DATADIR/config/win-run.yml"
             "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/win-run.yml"
         )
     fi
@@ -329,10 +347,14 @@ if __name__ == "__main__":
 '
 }
 
+# Skip main execution when sourced (e.g. bats tests for alias functions)
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
+
 CMDARGS=()
 RAW_OUTPUT=false
 PLAIN_MODE=false
-CUSTOM_CONFIG=""
 VERBOSE=false
 
 if [[ -L "$0" ]]; then
@@ -366,7 +388,7 @@ else
             shift
             ;;
         -c)
-            if [[ -z "$2" ]]; then
+            if [[ $# -lt 2 || -z "${2:-}" ]]; then
                 echo "Error: -c option requires a config file argument" >&2
                 exit 1
             fi

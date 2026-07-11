@@ -19,7 +19,7 @@ teardown() {
     
     # Test that win-run converts the path
     # We'll check the log to see if path conversion happened
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run echo '$test_file' || true"
+    run bash -c "timeout 2 win-run echo '$test_file' || true"
     
     # Check the log for path conversion
     local log_file="$HOME/.local/state/wslutil/win-run.log"
@@ -35,7 +35,7 @@ teardown() {
     skip_if_not_wsl
     
     # Test with non-existent path - should not be converted
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run echo '/non/existent/path' || true"
+    run bash -c "timeout 2 win-run echo '/non/existent/path' || true"
     
     # Check the log
     local log_file="$HOME/.local/state/wslutil/win-run.log"
@@ -55,7 +55,7 @@ teardown() {
     mkdir -p "$test_dir"
     
     # Test that win-run converts the directory path
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run echo '$test_dir' || true"
+    run bash -c "timeout 2 win-run echo '$test_dir' || true"
     
     # Check the log for path conversion
     local log_file="$HOME/.local/state/wslutil/win-run.log"
@@ -76,7 +76,7 @@ teardown() {
     file2=$(create_test_file "file2.txt")
     
     # Test with multiple file arguments
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run echo '$file1' '$file2' || true"
+    run bash -c "timeout 2 win-run echo '$file1' '$file2' || true"
     
     # Check the log for both path conversions
     local log_file="$HOME/.local/state/wslutil/win-run.log"
@@ -108,7 +108,7 @@ aliases:
 EOF
     
     # Test alias with path in options
-    run bash -c "cd '$WSLUTIL_DIR' && timeout 2 bin/win-run -c '$config_file' pathtest || true"
+    run bash -c "timeout 2 win-run -c '$config_file' pathtest || true"
     
     # Check the log for path conversion in options
     local log_file="$HOME/.local/state/wslutil/win-run.log"
@@ -142,7 +142,7 @@ EOF
     chmod +x "$mock_script"
     
     export CUSTOM_CONFIG="$config_file"
-    run "$mock_script" "$WSLUTIL_DIR/bin/win-run" "envpath"
+    run "$mock_script" "$CHECKOUT_ROOT/bin/win-run" "envpath"
     
     [ "$status" -eq 0 ]
     # Should expand WIN_WINDIR and convert to Windows path

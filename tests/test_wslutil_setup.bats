@@ -5,7 +5,7 @@ load test_helpers
 # Setup and teardown for each test
 setup() {
     setup_test_env
-    export WSLUTIL_SETUP="$WSLUTIL_DIR/bin/wslutil-setup"
+    export WSLUTIL_SETUP="$CHECKOUT_ROOT/bin/wslutil-setup"
     export XDG_DATA_HOME="$TEST_TEMP_DIR/.local/share"
     export TEST_SHIMDIR="$XDG_DATA_HOME/wslutil/bin"
     
@@ -18,9 +18,6 @@ setup() {
     echo '#!/bin/bash' > "$TEST_TEMP_DIR/bin/win-run"
     echo 'echo "mock win-run $@"' >> "$TEST_TEMP_DIR/bin/win-run"
     chmod +x "$TEST_TEMP_DIR/bin/win-run"
-    
-    # Override WSLUTIL_DIR to point to test directory
-    export WSLUTIL_DIR="$TEST_TEMP_DIR"
     
     # Create cache directory structure
     export XDG_CACHE_HOME="$TEST_TEMP_DIR/.cache"
@@ -249,7 +246,7 @@ enabled = true"
     
     # Verify symlink was created in the XDG shimdir with an absolute target
     [ -L "$TEST_SHIMDIR/test.exe" ]
-    [ ! -e "$WSLUTIL_DIR/bin/test.exe" ]
+    [ ! -e "$TEST_TEMP_DIR/bin/test.exe" ]
     link_target=$(readlink "$TEST_SHIMDIR/test.exe")
     [ "$link_target" = "$(cd "$BATS_TEST_DIRNAME/../bin" && pwd)/win-run" ]
 }
