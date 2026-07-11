@@ -1,0 +1,100 @@
+#!/usr/bin/bash
+# wslutil-config - Manage user wslutil configuration
+set -euo pipefail
+
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "wslutil-config: path helper not found" >&2
+    exit 1
+fi
+DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+
+show_help() {
+    cat <<EOF
+Usage: wslutil-config init [OPTIONS]
+
+Copy factory default configuration files into the user config directory.
+
+Source:  \$DATADIR/config/
+Target:  \${XDG_CONFIG_HOME:-\$HOME/.config}/wslutil/
+
+Options:
+  --force    Overwrite existing files in the user config directory
+  --help     Show this help message and exit
+
+Examples:
+  wslutil config init           # Copy missing factory defaults
+  wslutil config init --force   # Replace all factory config files
+
+EOF
+}
+
+init_command() {
+    local force=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+        --force)
+            force=1
+            shift
+            ;;
+        --help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option for init: $1" >&2
+            show_help
+            exit 1
+            ;;
+        esac
+    done
+
+    local src="$DATADIR/config"
+    local dest="${XDG_CONFIG_HOME:-$HOME/.config}/wslutil"
+
+    if [[ ! -d "$src" ]]; then
+        echo "wslutil-config: factory config directory not found: $src" >&2
+        exit 1
+    fi
+
+    mkdir -p "$dest"
+
+    local copied=0
+    local skipped=0
+    local file
+    for file in "$src"/*; do
+        [[ -f "$file" ]] || continue
+        local name
+        name="$(basename "$file")"
+        if [[ -e "$dest/$name" && "$force" -eq 0 ]]; then
+            skipped=$((skipped + 1))
+            continue
+        fi
+        cp "$file" "$dest/$name"
+        copied=$((copied + 1))
+    done
+
+    echo "Initialized user config in $dest ($copied copied, $skipped skipped)"
+}
+
+case "${1:-}" in
+init)
+    shift
+    init_command "$@"
+    ;;
+--help)
+    show_help
+    exit 0
+    ;;
+*)
+    echo "Usage: wslutil-config init [--force]" >&2
+    echo "Run 'wslutil-config init --help' for more information." >&2
+    exit 1
+    ;;
+esac
