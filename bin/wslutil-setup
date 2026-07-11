@@ -13,6 +13,20 @@
 # wslutil-setup - Configure and merge wslutil settings
 set -euo pipefail
 
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "wslutil-setup: path helper not found" >&2
+    exit 1
+fi
+DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+SHIMDIR="$(wslutil_shimdir)"
+
 show_help() {
     cat <<EOF
 Usage: wslutil-setup [OPTIONS]
@@ -20,18 +34,22 @@ Usage: wslutil-setup [OPTIONS]
 Configure and merge wslutil settings into system configuration files.
 
 This command performs the following configuration merging:
-- wslutil.conf: Creates symlinks for Windows executables in bin directory
+- wslutil.yml: Creates Windows executable shims in the XDG shim directory
 - wsl.conf: Merges settings into /etc/wsl.conf
 - wslconfig: Merges settings into \${WIN_USERPROFILE}/.wslconfig
 - wslgconfig: Merges settings into \${WIN_USERPROFILE}/.wslgconfig
 
 Options:
+  --shims          Create Windows executable shims only
+  --system         Merge system and Windows WSL configuration only
   --dry-run         Show what would be done without making changes
   -c, --config FILE Use custom config file instead of default wslutil.yml
   --help            Show this help message and exit
 
 Examples:
-  wslutil-setup                          # Perform configuration setup
+  wslutil-setup                          # Create shims, then merge system config
+  wslutil-setup --shims                  # Create/update shims only
+  wslutil-setup --system                 # Merge system/Windows config only
   wslutil-setup --dry-run                # Preview changes without applying
   wslutil-setup -c /path/to/my-config.yml      # Use custom config file
   wslutil-setup --config ./project-config.yml # Use custom config file
@@ -46,8 +64,21 @@ EOF
 # Parse command line arguments
 DRY_RUN=0
 CUSTOM_CONFIG_FILE=""
+RUN_SHIMS=0
+RUN_SYSTEM=0
+MODE_SPECIFIED=0
 while [[ $# -gt 0 ]]; do
     case $1 in
+    --shims)
+        RUN_SHIMS=1
+        MODE_SPECIFIED=1
+        shift
+        ;;
+    --system)
+        RUN_SYSTEM=1
+        MODE_SPECIFIED=1
+        shift
+        ;;
     --dry-run)
         DRY_RUN=1
         shift
@@ -76,6 +107,11 @@ while [[ $# -gt 0 ]]; do
         ;;
     esac
 done
+
+if [[ $MODE_SPECIFIED -eq 0 ]]; then
+    RUN_SHIMS=1
+    RUN_SYSTEM=1
+fi
 
 # Color codes for output
 RED='\033[0;31m'
@@ -106,19 +142,17 @@ if [[ $DRY_RUN -eq 1 ]]; then
     log_info "Running in dry-run mode - no changes will be made"
 fi
 
-# Get the directory where wslutil is installed
-WSLUTIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONFIG_DIR="$WSLUTIL_DIR/config"
+log_info "Using data directory: $DATADIR"
+log_info "Using shim directory: $SHIMDIR"
 
-log_info "Using configuration directory: $CONFIG_DIR"
-
-# Check if crudini is available
-if ! command -v crudini &>/dev/null; then
-    log_error "crudini is required but not installed"
-    log_error "Please install crudini and try again"
-    log_error "Run 'wslutil doctor' to check for all required dependencies"
-    exit 1
-fi
+require_crudini() {
+    if ! command -v crudini &>/dev/null; then
+        log_error "crudini is required but not installed"
+        log_error "Please install crudini and try again"
+        log_error "Run 'wslutil doctor' to check for all required dependencies"
+        exit 1
+    fi
+}
 
 # Function to merge INI-style configuration files using crudini
 merge_config_file() {
@@ -188,6 +222,10 @@ process_winutil_config() {
         return 1
     fi
 
+    if [[ $DRY_RUN -ne 1 ]]; then
+        mkdir -p "$SHIMDIR"
+    fi
+
     # Process winrun entries (symlink to win-run script)
     log_info "Processing winrun entries..."
     local winrun_entries
@@ -196,7 +234,7 @@ process_winutil_config() {
     if [[ -n "$winrun_entries" ]]; then
         while IFS= read -r entry; do
             [[ -z "$entry" ]] && continue
-            create_symlink_to_winrun "$entry"
+            create_symlink_to_winrun "$entry" || true
         done <<<"$winrun_entries"
     else
         log_info "No winrun entries found in $config_file"
@@ -210,7 +248,7 @@ process_winutil_config() {
     if [[ -n "$winexe_entries" ]]; then
         while IFS= read -r entry; do
             [[ -z "$entry" ]] && continue
-            create_direct_symlink "$entry"
+            create_direct_symlink "$entry" || true
         done <<<"$winexe_entries"
     else
         log_info "No winexe entries found in $config_file"
@@ -220,8 +258,8 @@ process_winutil_config() {
 # Function to create symlink to win-run script
 create_symlink_to_winrun() {
     local executable="$1"
-    local target_link="$WSLUTIL_DIR/bin/$executable"
-    local win_run_script="$WSLUTIL_DIR/bin/win-run"
+    local target_link="$SHIMDIR/$executable"
+    local win_run_script="$_wsu_bin/win-run"
 
     if [[ ! -f "$win_run_script" ]]; then
         log_error "win-run script not found: $win_run_script"
@@ -229,12 +267,12 @@ create_symlink_to_winrun() {
     fi
 
     # Check if symlink already exists and points to the correct target
-    if [[ -L "$target_link" && "$(readlink "$target_link")" == "win-run" ]]; then
-        log_info "Symlink already exists: $executable -> win-run (skipping)"
+    if [[ -L "$target_link" && "$(readlink "$target_link")" == "$win_run_script" ]]; then
+        log_info "Symlink already exists: $executable -> $win_run_script (skipping)"
         return 0
     fi
 
-    log_info "Creating winrun symlink: $executable -> win-run"
+    log_info "Creating winrun symlink: $executable -> $win_run_script"
 
     if [[ $DRY_RUN -eq 1 ]]; then
         log_info "[DRY-RUN] Would create symlink: $target_link -> $win_run_script"
@@ -247,9 +285,9 @@ create_symlink_to_winrun() {
         log_info "Removed existing: $target_link"
     fi
 
-    # Create the symlink (use relative path since both are in the same directory)
-    if ln -s "win-run" "$target_link"; then
-        log_success "Created symlink: $executable -> win-run"
+    # Create the symlink to the installed win-run, not a generated shimdir entry.
+    if ln -s "$win_run_script" "$target_link"; then
+        log_success "Created symlink: $executable -> $win_run_script"
     else
         log_error "Failed to create symlink: $target_link"
         return 1
@@ -321,7 +359,7 @@ create_direct_symlink() {
         fi
     fi
 
-    local target_link="$WSLUTIL_DIR/bin/$symlink_name"
+    local target_link="$SHIMDIR/$symlink_name"
 
     # Verify the executable actually exists
     if [[ ! -f "$win_executable" ]]; then
@@ -414,8 +452,24 @@ update_programs_cache() {
     log_info "Windows executable cache updated using PATH: $programs_cache ($(wc -l <"$programs_cache") executables)"
 }
 
-# Function to process configuration files from a given directory
-process_config_directory() {
+# Function to select the wslutil.yml file used for shim creation
+select_shim_config_file() {
+    if [[ -n "$CUSTOM_CONFIG_FILE" ]]; then
+        echo "$CUSTOM_CONFIG_FILE"
+        return 0
+    fi
+
+    local user_config_file="${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/wslutil.yml"
+    if [[ -f "$user_config_file" ]]; then
+        echo "$user_config_file"
+        return 0
+    fi
+
+    echo "$DATADIR/config/wslutil.yml"
+}
+
+# Function to process system configuration files from a given directory
+process_system_config_directory() {
     local config_dir="$1"
     local phase_name="$2"
 
@@ -427,18 +481,13 @@ process_config_directory() {
     log_info "=== Phase: $phase_name ==="
     log_info "Processing configuration files from: $config_dir"
 
-    # Process wslutil.yml
-    if [[ -f "$config_dir/wslutil.yml" ]]; then
-        process_winutil_config "$config_dir/wslutil.yml"
-    fi
-
     # Merge wsl.conf into /etc/wsl.conf
     if [[ -f "$config_dir/wsl.conf" ]]; then
         merge_config_file "$config_dir/wsl.conf" "/etc/wsl.conf" "WSL configuration ($phase_name)"
     fi
 
     # Check if WIN_USERPROFILE is set for Windows config files
-    if [[ -z "$WIN_USERPROFILE" ]]; then
+    if [[ -z "${WIN_USERPROFILE:-}" ]]; then
         log_warning "WIN_USERPROFILE not set - skipping Windows config files for $phase_name"
         log_warning "Please run 'eval \"\$(wslutil shellenv)\"' first to set up the environment"
     else
@@ -454,21 +503,36 @@ process_config_directory() {
     fi
 }
 
+process_shims() {
+    local shim_config_file
+    shim_config_file="$(select_shim_config_file)"
+
+    log_info "=== Phase: Shim Configuration ==="
+    log_info "Using shim directory: $SHIMDIR"
+    process_winutil_config "$shim_config_file"
+}
+
+process_system_configs() {
+    require_crudini
+
+    # Phase 1: Process system/default configuration files
+    process_system_config_directory "$DATADIR/config" "System Configuration"
+
+    # Phase 2: Process user-specific configuration files
+    local user_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wslutil"
+    process_system_config_directory "$user_config_dir" "User Configuration"
+}
+
 # Main setup process
 main() {
     log_info "Starting wslutil configuration setup"
 
-    # Phase 1: Process system/default configuration files
-    process_config_directory "$CONFIG_DIR" "System Configuration"
+    if [[ $RUN_SHIMS -eq 1 ]]; then
+        process_shims
+    fi
 
-    # Phase 2: Process user-specific configuration files
-    if [[ -n "$CUSTOM_CONFIG_FILE" ]]; then
-        log_info "=== Phase: Custom Configuration ==="
-        log_info "Processing custom config file: $CUSTOM_CONFIG_FILE"
-        process_winutil_config "$CUSTOM_CONFIG_FILE"
-    else
-        local user_config_dir="$HOME/.config/wslutil"
-        process_config_directory "$user_config_dir" "User Configuration"
+    if [[ $RUN_SYSTEM -eq 1 ]]; then
+        process_system_configs
     fi
 
     if [[ $DRY_RUN -eq 1 ]]; then
