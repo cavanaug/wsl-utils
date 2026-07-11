@@ -8,11 +8,11 @@ wslutil_resolve_datadir() {
     bindir="$(cd "$(dirname "$script_path")" && pwd)"
 
     if [[ -d "$bindir/../share/wslutil/config" && -d "$bindir/../share/wslutil/env" ]]; then
-        cd "$bindir/../share/wslutil" && pwd
+        (cd "$bindir/../share/wslutil" && pwd)
         return 0
     fi
     if [[ -d "$bindir/../config" && -d "$bindir/../env" ]]; then
-        cd "$bindir/.." && pwd
+        (cd "$bindir/.." && pwd)
         return 0
     fi
     echo "wslutil: cannot find data directory relative to $bindir" >&2
