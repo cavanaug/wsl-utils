@@ -1,0 +1,246 @@
+#!/usr/bin/bash
+# win-env - Read Windows environment variables (cached from cmd.exe /c set)
+set -euo pipefail
+
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/wslutil"
+CACHE_FILE="${WSLUTIL_WIN_ENV_CACHE:-$CACHE_DIR/env.win}"
+LOCK_FILE="${CACHE_FILE}.lock"
+WIN_WINDIR="${WIN_WINDIR:-/mnt/c/Windows}"
+COMSPEC="${WIN_WINDIR}/System32/cmd.exe"
+PREFIX="WIN_"
+STALE_MINUTES=60
+
+MODE="get" # get | export | refresh | list
+EXPORT_KEYS=()
+GET_KEY=""
+
+show_help() {
+    cat <<'EOF'
+Usage: win-env [OPTIONS] [VAR...]
+
+Read Windows environment variables via a cached `cmd.exe /c set` dump.
+Paths are converted to WSL form (/mnt/c/...).
+
+Modes:
+  win-env VAR                 Print one variable value
+  win-env                     List cached variable names
+  win-env --export VAR...     Print bash export lines for eval
+  win-env --refresh           Rebuild the cache now
+
+Options:
+  --export            Emit `export PREFIXVAR='...'` lines (for eval)
+  --prefix PREFIX     Prefix for --export names (default: WIN_)
+  --refresh           Force cache rebuild
+  --help              Show this help
+
+Examples:
+  win-env USERPROFILE
+  eval "$(win-env --export USERPROFILE APPDATA ProgramFiles)"
+  eval "$(win-env --export --prefix '' USERNAME)"
+  win-env --refresh
+
+Cache: ${XDG_CACHE_HOME:-~/.cache}/wslutil/env.win
+EOF
+}
+
+sanitize_key() {
+    local key="$1"
+    if [[ "$key" =~ [\(\)\#\.] ]]; then
+        key="${key//\(/_}"
+        key="${key//\)/_}"
+        key="${key//\./_}"
+        key="${key%_}"
+    fi
+    printf '%s' "$key"
+}
+
+export_name() {
+    # ProgramFiles_x86 → PROGRAMFILES_X86
+    local key="$1"
+    printf '%s' "${key^^}"
+}
+
+refresh_cache() {
+    mkdir -p "$CACHE_DIR"
+    if [[ ! -x "$COMSPEC" ]]; then
+        echo "win-env: cmd.exe not found at $COMSPEC" >&2
+        return 1
+    fi
+    local win_utf8="${_wsu_bin}/win-utf8"
+    if [[ ! -x "$win_utf8" ]]; then
+        if command -v win-utf8 >/dev/null 2>&1; then
+            win_utf8="$(command -v win-utf8)"
+        else
+            echo "win-env: win-utf8 not found" >&2
+            return 1
+        fi
+    fi
+
+    exec 200>"$LOCK_FILE"
+    if ! flock -n 200; then
+        # Another refresh in progress — wait briefly for the file
+        flock -w 10 200 || true
+        exec 200>&-
+        [[ -f "$CACHE_FILE" ]]
+        return
+    fi
+
+    local temp_win="${CACHE_FILE}.$$"
+    if ! "$COMSPEC" /c "set" 2>/dev/null | "$win_utf8" |
+        sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' \
+            -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' \
+            -e 's#\\#/#g' | sort >"$temp_win"; then
+        rm -f "$temp_win"
+        exec 200>&-
+        echo "win-env: failed to read Windows environment" >&2
+        return 1
+    fi
+
+    # Normalize keys (parens etc.) while rewriting
+    local out="${CACHE_FILE}.out.$$"
+    : >"$out"
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" != *=* ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        key="$(sanitize_key "$key")"
+        printf '%s=%s\n' "$key" "$value" >>"$out"
+    done <"$temp_win"
+    mv -f "$out" "$CACHE_FILE"
+    rm -f "$temp_win"
+    exec 200>&-
+}
+
+ensure_cache() {
+    mkdir -p "$CACHE_DIR"
+    if [[ ! -f "$CACHE_FILE" ]]; then
+        refresh_cache
+        return
+    fi
+    if [[ -n "$(find "$CACHE_FILE" -mmin +"${STALE_MINUTES}" 2>/dev/null)" ]]; then
+        # ponytail: background refresh; ceiling = stale read for up to STALE_MINUTES after first hit
+        (refresh_cache) &>/dev/null &
+    fi
+}
+
+lookup() {
+    local want="$1"
+    want="$(sanitize_key "$want")"
+    ensure_cache
+    [[ -f "$CACHE_FILE" ]] || return 1
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" != *=* ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        if [[ "$key" == "$want" ]]; then
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done <"$CACHE_FILE"
+    echo "win-env: $want not found" >&2
+    return 1
+}
+
+list_keys() {
+    ensure_cache
+    [[ -f "$CACHE_FILE" ]] || return 1
+    cut -d= -f1 "$CACHE_FILE"
+}
+
+emit_exports() {
+    ensure_cache
+    [[ -f "$CACHE_FILE" ]] || return 1
+    local name
+    for name in "${EXPORT_KEYS[@]}"; do
+        local value
+        if ! value="$(lookup "$name")"; then
+            return 1
+        fi
+        local var="${PREFIX}$(export_name "$(sanitize_key "$name")")"
+        printf 'export %s=%q\n' "$var" "$value"
+    done
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+        show_help
+        exit 0
+        ;;
+    --refresh)
+        MODE="refresh"
+        shift
+        ;;
+    --export)
+        MODE="export"
+        shift
+        ;;
+    --prefix)
+        PREFIX="${2-}"
+        shift 2
+        ;;
+    --prefix=*)
+        PREFIX="${1#--prefix=}"
+        shift
+        ;;
+    --)
+        shift
+        break
+        ;;
+    -*)
+        echo "win-env: unknown option: $1" >&2
+        show_help >&2
+        exit 1
+        ;;
+    *)
+        if [[ "$MODE" == "export" ]]; then
+            EXPORT_KEYS+=("$1")
+        elif [[ -z "$GET_KEY" ]]; then
+            GET_KEY="$1"
+            MODE="get"
+        else
+            echo "win-env: only one VAR allowed in get mode (use --export for multiple)" >&2
+            exit 1
+        fi
+        shift
+        ;;
+    esac
+done
+
+# Trailing args after option parse loop already consumed; handle leftover in $@
+while [[ $# -gt 0 ]]; do
+    if [[ "$MODE" == "export" ]]; then
+        EXPORT_KEYS+=("$1")
+    elif [[ -z "$GET_KEY" ]]; then
+        GET_KEY="$1"
+        MODE="get"
+    else
+        echo "win-env: only one VAR allowed in get mode (use --export for multiple)" >&2
+        exit 1
+    fi
+    shift
+done
+
+case "$MODE" in
+refresh)
+    refresh_cache
+    ;;
+export)
+    if [[ ${#EXPORT_KEYS[@]} -eq 0 ]]; then
+        echo "win-env: --export requires at least one VAR" >&2
+        exit 1
+    fi
+    emit_exports
+    ;;
+get)
+    if [[ -n "$GET_KEY" ]]; then
+        lookup "$GET_KEY"
+    else
+        list_keys
+    fi
+    ;;
+esac

@@ -12,7 +12,8 @@
 #  win-paste
 #  - This script is used to paste the contents of the Windows clipboard into the current WSL terminal STDOUT
 #  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
-#  - This tool will also properly strip ^M characters from the clipboard contents, which will happen when copying multiline text from Windows applications.
+#  - By default this tool strips trailing ^M (CR) characters from text for Unix line endings.
+#  - Use --raw to skip line-ending manipulation (binary / exact clipboard bytes).
 #  - wslutil checkhealth will tell you if you need this script or not
 #
 # Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
@@ -29,13 +30,14 @@ USAGE:
 
 DESCRIPTION:
     Retrieves content from the Windows clipboard and outputs it to stdout.
-    Automatically strips carriage return characters (^M) for Unix compatibility.
+    By default strips trailing carriage return characters (^M) for Unix line endings.
 
     If WSLg is available and enabled, uses wl-paste with proper fallback.
     Otherwise, uses PowerShell's Get-Clipboard command.
 
 OPTIONS:
     -h, --help    Show this help message and exit
+    --raw         Do not alter line endings (no ^M stripping)
 
     When WSLg is available, all wl-paste options are supported:
     -n, --no-newline    Don't add newline at end of output (DEFAULT)
@@ -47,11 +49,12 @@ OPTIONS:
 EXAMPLES:
     win-paste > clipboard.txt       # Save clipboard to file
     win-paste | grep "error"        # Search clipboard content
+    win-paste --raw > binary.bin    # Exact clipboard bytes
     echo "backup: $(win-paste)"     # Include clipboard in output
 
 NOTES:
     - Logs usage to ~/.local/state/wslutil/win-clipboard.log
-    - Automatically handles Windows line endings
+    - Automatically handles Windows line endings unless --raw is used
     - Can be symlinked as wl-paste for compatibility
 EOF
     exit 0
@@ -59,16 +62,34 @@ fi
 
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 
-if [[ ${WSL2_GUI_APPS_ENABLED} == "1" && -x /usr/bin/wl-paste ]]; then
-    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-        mkdir -p ${HOME}/.local/state/wslutil
-        echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+RAW=0
+ARGS=()
+for arg in "$@"; do
+    case "$arg" in
+        --raw) RAW=1 ;;
+        *) ARGS+=("$arg") ;;
+    esac
+done
+
+paste_clipboard() {
+    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-paste ]]; then
+        if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+            mkdir -p ${HOME}/.local/state/wslutil
+            echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+        fi
+        /usr/bin/wl-paste -n "$@"
+    else
+        if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
+            mkdir -p ${HOME}/.local/state/wslutil
+            echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+        fi
+        "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw).ToString())'
     fi
-    /usr/bin/wl-paste -n "$@"
+}
+
+if [[ $RAW -eq 1 ]]; then
+    paste_clipboard "${ARGS[@]}"
 else
-    if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-        mkdir -p ${HOME}/.local/state/wslutil
-        echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${@}" >>${HOME}/.local/state/wslutil/win-clipboard.log
-    fi
-    "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write($(Get-Clipboard -Raw).tostring().replace("`r", ""))'
+    # Strip trailing CR (CRLF -> LF). Use --raw for binary / exact bytes.
+    paste_clipboard "${ARGS[@]}" | sed 's/\r$//'
 fi

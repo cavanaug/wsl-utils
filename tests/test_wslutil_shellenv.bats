@@ -10,6 +10,14 @@ teardown() {
     cleanup_test_env
 }
 
+@test "wslutil with no arguments shows usage without unbound variable" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Usage:"* ]]
+    [[ "$output" != *"unbound variable"* ]]
+}
+
 @test "checkout shellenv does not emit WSLUTIL_DIR and prepends shimdir" {
     run env -u WSLUTIL_DIR SHELL=/bin/bash "$BATS_TEST_DIRNAME/../bin/wslutil" shellenv
 

@@ -215,10 +215,10 @@ done
 
 ### Environment Checks
 printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Environment Checks"
-WSL_OK=false
+WSL_OK=true
 WSLUTIL_OK=false
-WIN_USERPROFILE_OK=false
-WIN_WINDIR_OK=false
+WIN_INTEROP_OK=false
+WIN_USERPROFILE=""
 
 # Check if wslutil is in PATH
 printf "["
@@ -230,25 +230,28 @@ else
 fi
 printf "] %s\n" "wslutil in PATH"
 
-# Check for WIN_USERPROFILE
+# Windows interop: cmd.exe reachable and win-env can resolve USERPROFILE
+WIN_WINDIR_DEFAULT="${WIN_WINDIR:-/mnt/c/Windows}"
 printf "["
-if [ -n "$WIN_USERPROFILE" ]; then
+if [[ -x "${WIN_WINDIR_DEFAULT}/System32/cmd.exe" ]]; then
     printf "$CHECK"
-    WIN_USERPROFILE_OK=true
 else
     printf "$CROSS"
 fi
-printf "] %s\n" "WIN_USERPROFILE set"
+printf "] %s\n" "Windows cmd.exe reachable"
 
-# Check for WIN_WINDIR
 printf "["
-if [ -n "$WIN_WINDIR" ]; then
-    printf "$CHECK"
-    WIN_WINDIR_OK=true
+if [[ -x "${_wsu_bin}/win-env" ]]; then
+    if WIN_USERPROFILE="$("${_wsu_bin}/win-env" USERPROFILE 2>/dev/null)"; then
+        printf "$CHECK"
+        WIN_INTEROP_OK=true
+    else
+        printf "$CROSS"
+    fi
 else
     printf "$CROSS"
 fi
-printf "] %s\n" "WIN_WINDIR set"
+printf "] %s\n" "win-env USERPROFILE"
 
 ###  File Presence Checks
 printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Required Files"
@@ -296,7 +299,7 @@ done
 
 ###  Windows Configuration Files
 # Build Windows files array if WIN_USERPROFILE is available
-if [[ -n "$WIN_USERPROFILE" ]]; then
+if [[ -n "${WIN_USERPROFILE:-}" ]]; then
     WINDOWS_FILES=(
         "$WIN_USERPROFILE/.wslconfig"
         "$WIN_USERPROFILE/.wslgconfig"
@@ -317,7 +320,7 @@ if [[ -n "$WIN_USERPROFILE" ]]; then
     done
 else
     printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Windows Config Files"
-    printf "[$CROSS] Skipped - WIN_USERPROFILE not available\n"
+    printf "[$CROSS] Skipped - Windows USERPROFILE not available via win-env\n"
 fi
 
 ###  File Content Checks (Warnings Only)
@@ -347,7 +350,7 @@ if command -v crudini >/dev/null 2>&1; then
     fi
 
     # Check Windows configuration files content
-    if [[ -n "$WIN_USERPROFILE" ]]; then
+    if [[ -n "${WIN_USERPROFILE:-}" ]]; then
         # Check .wslconfig sections
         if [ -e "$WIN_USERPROFILE/.wslconfig" ]; then
             for section in wsl2; do
@@ -386,7 +389,7 @@ if command -v crudini >/dev/null 2>&1; then
             printf "[${CROSS}] .wslgconfig not found — skipping content checks\n"
         fi
     else
-        printf "[${CROSS}] WIN_USERPROFILE not available — skipping Windows file content checks\n"
+        printf "[${CROSS}] Windows USERPROFILE not available via win-env — skipping Windows file content checks\n"
     fi
 
     printf "\n"
@@ -446,7 +449,7 @@ get_install_suggestion() {
 
 ###  Summary
 TOTAL_MISSING=$((MISSING_COMMANDS + MISSING_FILES))
-if $WSL_OK && $WSLUTIL_OK && $WIN_USERPROFILE_OK && $WIN_WINDIR_OK; then
+if $WSL_OK && $WSLUTIL_OK && $WIN_INTEROP_OK; then
     ENV_OK=true
 else
     ENV_OK=false
@@ -477,10 +480,9 @@ else
     if ! $WSLUTIL_OK; then
         printf "\n  # ${RED}Tip:${RESET} 'wslutil' is not in your PATH. Make sure it's installed and added to ~/.local/bin or another directory in your PATH.\n"
     fi
-    if ! $WIN_USERPROFILE_OK || ! $WIN_WINDIR_OK; then
-        printf "\n  # ${RED}Tip:${RESET} Windows environment variables (WIN_USERPROFILE, WIN_WINDIR) missing. Run:\n"
-        printf "  ${GREEN}eval \"\$(wslutil shellenv)\"${RESET}\n"
-        printf "  and add it to your shell's startup file (e.g., ~/.bashrc, ~/.zshrc).\n"
+    if ! $WIN_INTEROP_OK; then
+        printf "\n  # ${RED}Tip:${RESET} Windows environment cache unavailable. Try:\n"
+        printf "  ${GREEN}win-env --refresh${RESET}\n"
     fi
     if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
         printf "\n  # ${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
@@ -579,8 +581,10 @@ if [[ -d "${WSLUTIL_DATADIR}/.git" ]]; then
     else
         printf "[$CROSS] Local version: could not determine from git\n"
     fi
+elif [[ -f "${WSLUTIL_DATADIR}/VERSION" ]]; then
+    printf "[$CHECK] Installed version: %s\n" "$(< "${WSLUTIL_DATADIR}/VERSION")"
 else
-    printf "[$CROSS] Version check: not a git repository\n"
+    printf "[$CROSS] Version check: could not determine version\n"
 fi
 
 printf "\n"

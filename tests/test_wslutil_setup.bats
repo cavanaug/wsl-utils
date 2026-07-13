@@ -292,17 +292,17 @@ appendWindowsPath = false"
     
     run "$WSLUTIL_SETUP" --system --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bootstrapping Windows environment variables" ]]
+    [[ "$output" =~ "Bootstrapping Windows environment variables via win-env" ]]
     if is_wsl; then
         [[ "$output" != *"WIN_USERPROFILE not set - skipping Windows config files"* ]]
     else
-        [[ "$output" =~ "Could not bootstrap WIN_\* via shellenv" ]]
+        [[ "$output" =~ "Could not bootstrap WIN_\* via win-env" ]]
         [[ "$output" =~ "WIN_USERPROFILE not set - skipping Windows config files" ]]
     fi
 }
 
 # Test WIN_* bootstrap when shellenv was not loaded
-@test "wslutil-setup bootstraps WIN_* via shellenv when not preloaded" {
+@test "wslutil-setup bootstraps WIN_* via win-env when not preloaded" {
     skip_if_not_wsl
     skip_if_no_yq
     
@@ -313,6 +313,6 @@ appendWindowsPath = false"
     
     run "$WSLUTIL_SETUP" --shims --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Bootstrapping Windows environment variables" ]]
-    [[ "$output" != *"Could not bootstrap WIN_* via shellenv"* ]]
+    [[ "$output" =~ "Bootstrapping Windows environment variables via win-env" ]]
+    [[ "$output" != *"Could not bootstrap WIN_* via win-env"* ]]
 }

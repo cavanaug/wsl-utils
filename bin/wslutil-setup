@@ -138,21 +138,33 @@ log_error() {
 }
 
 bootstrap_win_env_if_needed() {
-    if [[ -n "${WIN_USERPROFILE:-}" && -n "${WIN_WINDIR:-}" ]]; then
+    export WIN_WINDIR="${WIN_WINDIR:-/mnt/c/Windows}"
+    # Fill path vars needed for config envsubst from win-env cache (not shellenv)
+    local need=0
+    local v
+    for v in WIN_USERPROFILE WIN_PROGRAMFILES WIN_PROGRAMFILES_X86 WIN_LOCALAPPDATA WIN_APPDATA; do
+        if [[ -z "${!v:-}" ]]; then
+            need=1
+            break
+        fi
+    done
+    [[ $need -eq 0 ]] && return 0
+
+    log_info "Bootstrapping Windows environment variables via win-env"
+    local win_env="${_wsu_bin}/win-env"
+    if [[ ! -x "$win_env" ]]; then
+        log_warning "win-env not found; path expansions may be skipped"
         return 0
     fi
-    log_info "Bootstrapping Windows environment variables"
     local env_out
-    if ! env_out="$("$_wsu_bin/wslutil" shellenv 2>/dev/null)"; then
-        log_warning "Could not bootstrap WIN_* via shellenv; path expansions may be skipped"
+    if ! env_out="$("$win_env" --export USERPROFILE APPDATA LOCALAPPDATA ProgramFiles ProgramFiles_x86 2>/dev/null)"; then
+        log_warning "Could not bootstrap WIN_* via win-env; path expansions may be skipped"
         return 0
     fi
-    # shellcheck disable=SC1090
-    # shellenv sources WIN_ENV cache; disable nounset so partial keys do not abort setup
     set +u
     if ! eval "$env_out"; then
         set -u
-        log_warning "Could not bootstrap WIN_* via shellenv; path expansions may be skipped"
+        log_warning "Could not bootstrap WIN_* via win-env; path expansions may be skipped"
         return 0
     fi
     set -u
@@ -510,7 +522,7 @@ process_system_config_directory() {
     # Check if WIN_USERPROFILE is set for Windows config files
     if [[ -z "${WIN_USERPROFILE:-}" ]]; then
         log_warning "WIN_USERPROFILE not set - skipping Windows config files for $phase_name"
-        log_warning "Please run 'eval \"\$(wslutil shellenv)\"' first to set up the environment"
+        log_warning "Please run 'win-env --refresh' or check Windows interop"
     else
         # Merge wslconfig into Windows user profile
         if [[ -f "$config_dir/wslconfig" ]]; then

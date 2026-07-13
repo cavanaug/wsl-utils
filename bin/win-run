@@ -32,12 +32,18 @@ fi
 DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
 CUSTOM_CONFIG="${CUSTOM_CONFIG:-}"
 
-# Set up environment variables for alias resolution
+# Set up environment variables for alias resolution (defaults; no shellenv required)
 export WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 export WIN_PROGRAMFILES=${WIN_PROGRAMFILES:-/mnt/c/Program\ Files}
 export WIN_PROGRAMFILES_X86=${WIN_PROGRAMFILES_X86:-/mnt/c/Program\ Files\ \(x86\)}
 export WIN_LOCALAPPDATA=${WIN_LOCALAPPDATA:-/mnt/c/Users/$USER/AppData/Local}
 export WIN_APPDATA=${WIN_APPDATA:-/mnt/c/Users/$USER/AppData/Roaming}
+if [[ -z "${WIN_USERPROFILE:-}" ]]; then
+    if [[ -x "${_wsu_bin}/win-env" ]]; then
+        WIN_USERPROFILE="$("${_wsu_bin}/win-env" USERPROFILE 2>/dev/null || true)"
+    fi
+    export WIN_USERPROFILE="${WIN_USERPROFILE:-/mnt/c/Users/$USER}"
+fi
 
 # Function to display help information
 show_help() {

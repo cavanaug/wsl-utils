@@ -6,7 +6,7 @@ DATADIR     := $(DESTDIR)$(PREFIX)/share/wslutil
 
 CORE_SCRIPTS := \
 	wslutil wslutil-config wslutil-doctor wslutil-setup wslutil-uptime \
-	win-run win-open win-browser win-copy win-paste win-utf8 \
+	win-run win-open win-browser win-copy win-paste win-utf8 win-env \
 	wslpath-drive
 
 .PHONY: install uninstall check-deps

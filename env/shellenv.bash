@@ -1,8 +1,14 @@
-declare -g -x WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-if [[ ! -d $WIN_WINDIR ]]; then
-    echo "ERROR: WIN_WINDIR is not configured and unable to find WINDOWS" >&2
-    exit 1
+# shellenv.bash — interactive convenience for wsl-utils
+# Does not export WIN_* (those are optional; use: eval "$(win-env --export …)").
+# Scripts must resolve Windows paths via defaults or win-env, not shell exports.
+
+_wslutil_windir=${WIN_WINDIR:-/mnt/c/Windows}
+if [[ ! -d $_wslutil_windir ]]; then
+    echo "ERROR: Windows directory not found at ${_wslutil_windir}" >&2
+    unset _wslutil_windir
+    return 1 2>/dev/null || exit 1
 fi
+unset _wslutil_windir
 
 _wslutil_shimdir="${XDG_DATA_HOME:-$HOME/.local/share}/wslutil/bin"
 mkdir -p "$_wslutil_shimdir"
@@ -10,162 +16,37 @@ if [[ ! ":$PATH:" == *":$_wslutil_shimdir:"* ]]; then
     export PATH="${_wslutil_shimdir}:${PATH}"
 fi
 unset _wslutil_shimdir
+
 export WSL_INTEROP=${WSL_INTEROP:-/run/WSL/1_interop}
 if test ! -S ${WSL_INTEROP}; then
     echo "ERROR: WSL_INTEROP is not configured properly" >&2
-    exit 1
+    return 1 2>/dev/null || exit 1
 fi
 
-# TODO: Create wsl vars here based on XDG variables if set, else use the defaults.  These vars should then be used in the rest of the script and unset at the end to avoid environment pollution.
 mkdir -p "${HOME}/.cache/wslutil"
 mkdir -p "${HOME}/.local/state/wslutil"
 
-# WSL2-specific environment variables and functions
-declare -g -x WIN_ENV_FILE="${HOME}/.cache/wslutil/env"
-declare WIN_COMSPEC="/mnt/c/Windows/System32/cmd.exe"
-
-if [[ ! -f "${WIN_COMSPEC}" ]]; then
-    WIN_ERROR="ERROR: Windows system32 cmd.exe not found at ${WIN_COMSPEC}"
-    echo "${WIN_ERROR}" >&2
-    exit 1
+# Locate win-env (same bindir as wslutil when installed)
+_win_env=""
+if command -v win-env >/dev/null 2>&1; then
+    _win_env="$(command -v win-env)"
+elif command -v wslutil >/dev/null 2>&1; then
+    _cand="$(dirname "$(command -v wslutil)")/win-env"
+    [[ -x "$_cand" ]] && _win_env="$_cand"
+    unset _cand
 fi
 
-#
-# Setup the WIN_* global environment variables for WINDOWS for use in any cli usage
-#
-# WIN_ENV is a dictionary of all environment variables from cmd.exe that can be used in bash
-# - Source ${WIN_ENV}.sh to gain access to these variables
-# - Any directories in these variables will be converted to WSL format
-wslutil_build_win_env() {
-    local lockfile="${WIN_ENV_FILE}.lock"
-    local temp_sh="${WIN_ENV_FILE}.sh.$$"
-    local temp_win="${WIN_ENV_FILE}.win.$$"
-
-    # Try to acquire exclusive lock (non-blocking)
-    # Returns immediately if another process holds the lock
-    exec 200> "${lockfile}"
-    if ! flock -n 200; then
-        # Another process is building - skip
-        exec 200>&-
-        return 1
+# Warm Windows env cache via win-env (no WIN_* exports into the shell)
+if [[ -n "$_win_env" ]]; then
+    _cache="${XDG_CACHE_HOME:-$HOME/.cache}/wslutil/env.win"
+    if [[ ! -f "$_cache" ]]; then
+        "$_win_env" --refresh || true
+    elif [[ -n $(find "$_cache" -mmin +60 2>/dev/null) ]]; then
+        ("$_win_env" --refresh) &>/dev/null &
     fi
-
-    # We have the lock - build the cache
-    ${WIN_COMSPEC} /c "set" 2> /dev/null | win-utf8 \
-        | sed -e 's#=\([A-Za-z]\):#=/mnt/\L\1#' \
-            -e 's#;\([A-Za-z]\):#;/mnt/\L\1#g' \
-            -e 's#\\#/#g' | sort > "${temp_win}"
-
-    declare line=""
-    while IFS= read -r line; do
-        declare key="${line%%=*}"
-        declare value="${line#*=}"
-        if [[ "$key" =~ [\(\)\#\.] ]]; then
-            key="${key//\(/_}"
-            key="${key//\)/_}"
-            key="${key//\./_}"
-            key="${key%_}"
-        fi
-        echo WIN_ENV[\'${key}\']=\""${value}\"" >> "${temp_sh}"
-    done < "${temp_win}"
-
-    # Atomic rename (only successful if build completed)
-    if [[ -f "${temp_sh}" ]] && [[ -f "${temp_win}" ]]; then
-        mv -f "${temp_win}" "${WIN_ENV_FILE}.win"
-        mv -f "${temp_sh}" "${WIN_ENV_FILE}.sh"
-    fi
-
-    # Clean up temp files if they still exist
-    rm -f "${temp_sh}" "${temp_win}"
-
-    # Release lock (fd 200 closes automatically, but explicit is clearer)
-    exec 200>&-
-}
-
-# WARN: This is useful only for the interactive shell, subshells wont have this.   Im not even sure this should be exported given that limitation.
-declare -g -A -x WIN_ENV
-
-# Initial cache check and build
-if [[ ! -f "${WIN_ENV_FILE}.sh" ]]; then
-    # No cache exists - build it synchronously (foreground)
-    wslutil_build_win_env
-else
-    # Cache exists - check if it's stale (>1 hour old)
-    if [[ -n $(find "${WIN_ENV_FILE}.sh" -mmin +60 2> /dev/null) ]]; then
-        # Stale cache - trigger background rebuild
-        # Use subshell to avoid polluting current environment
-        (wslutil_build_win_env) &> /dev/null &
-    fi
+    unset _cache
 fi
+unset _win_env
 
-# Wait for any in-progress build to complete
-declare lockfile="${WIN_ENV_FILE}.lock"
-
-# Try to acquire lock with 5 second timeout
-# If we get it, build is done; release immediately
-exec 201> "${lockfile}"
-if flock -w 5 201; then
-    exec 201>&-
-else
-    exec 201>&-
-    echo_err "Error with lockfile"
-    return 1
-fi
-
-# Source the cache (guaranteed to exist and be complete now)
-if [[ -f "${WIN_ENV_FILE}.sh" ]]; then
-    # Validate cache file contains only WIN_ENV assignments
-    if grep -qvE '^(WIN_ENV\[|declare -A WIN_ENV|#|$)' "${WIN_ENV_FILE}.sh"; then
-        echo "ERROR: Cache file contains suspicious content" >&2
-        rm -f "${WIN_ENV_FILE}.sh" "${WIN_ENV_FILE}.win"
-        return 1
-    fi
-    source "${WIN_ENV_FILE}.sh"
-fi
-
-declare -g -x WIN_APPDATA="${WIN_ENV[APPDATA]}"
-declare -g -x WIN_LOCALAPPDATA="${WIN_ENV[LOCALAPPDATA]}"
-declare -g -x WIN_COMPUTERNAME="${WIN_ENV[COMPUTERNAME]}"
-declare -g -x WIN_USERNAME="${WIN_ENV[USERNAME]}"
-declare -g -x WIN_USERDOMAIN="${WIN_ENV[USERDOMAIN]}"
-declare -g -x WIN_USERPROFILE="${WIN_ENV[USERPROFILE]}"
-declare -g -x WIN_PROGRAMFILES="${WIN_ENV[ProgramFiles]}"
-declare -g -x WIN_PROGRAMFILES_X86="${WIN_ENV['ProgramFiles_x86']}"
-declare -g -x WIN_HOMEPATH="${WIN_ENV[HOMEDRIVE]}${WIN_ENV[HOMEPATH]}"
-
-#
-# Setup the graphical environment for WSL2 GUI apps
-# - wslg is required for things like clipboard support
-# - Attempt to correct scaling for high DPI displays
-#
-#  WARNING: This technically shouldnt be needed anymore with modern WSL/WSLg
-#
-# if [[ "${WSL2_GUI_APPS_ENABLED}" ]]; then
-#     # Ensure WSL2 GUI apps are enabled and set the DISPLAY variable for GUI applications
-#     if [[ -z "${DISPLAY}" ]]; then
-#         export DISPLAY=":0"
-#     fi
-#
-#     # This sets up the environment for wslg & Wayland so that things like wl-clipboard work properly
-#     if [ ! -L "${XDG_RUNTIME_DIR}/wayland-0" ] && [ "$(readlink -f ${XDG_RUNTIME_DIR}/wayland-0)" != "/mnt/wslg/runtime-dir/wayland-0" ]; then
-#         ln -s /mnt/wslg/runtime-dir/wayland-0 $XDG_RUNTIME_DIR
-#         ln -s /mnt/wslg/runtime-dir/wayland-0.lock $XDG_RUNTIME_DIR
-#     fi
-#
-#     # Ensure the Wayland socket is available for GUI applications
-#     if [[ -S "${XDG_RUNTIME_DIR}/wayland-0" ]]; then
-#         export WAYLAND_DISPLAY="wayland-0"
-#     fi
-#
-#     # Fix the scaling for high DPI displays in WSL2 GUI apps
-#     if command -v wayland-info > /dev/null; then
-#         if [[ "$(wayland-info | grep refresh | cut -f2 -d' ')" -ge 3840 ]]; then
-#             export GDK_SCALE=${GDK_SCALE:-1.5}
-#             export GDK_DPI_SCALE=${GDK_DPI_SCALE:-1.5}
-#             export QT_SCALE_FACTOR=${QT_SCALE_FACTOR:-1.5}
-#         fi
-#     fi
-# else
-#     # Fallback to X11 if GUI apps are not enabled
-#     export DISPLAY=":0"
-# fi
+# Optional: expose convenience vars yourself, e.g.
+#   eval "$(win-env --export USERPROFILE APPDATA LOCALAPPDATA ProgramFiles ProgramFiles_x86)"
