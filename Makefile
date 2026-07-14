@@ -20,6 +20,7 @@ install:
 	cp -R config/. $(DATADIR)/config/
 	cp -R env/. $(DATADIR)/env/
 	install -m 0644 lib/wslutil-paths.sh $(DATADIR)/lib/wslutil-paths.sh
+	install -m 0644 lib/wslutil-setup-common.sh $(DATADIR)/lib/wslutil-setup-common.sh
 	install -m 0644 VERSION $(DATADIR)/VERSION
 
 uninstall:
