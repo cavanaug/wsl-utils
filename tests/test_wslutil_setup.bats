@@ -28,21 +28,30 @@ teardown() {
     cleanup_test_env
 }
 
-# Test help functionality
-@test "wslutil-setup --help shows usage information" {
+# Test CLI subcommand contract
+@test "wslutil-setup --help documents exes windows linux" {
     run "$WSLUTIL_SETUP" --help
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Usage: wslutil-setup" ]]
-    [[ "$output" =~ "Configure and merge wslutil settings" ]]
-    [[ "$output" =~ "--shims" ]]
-    [[ "$output" =~ "--system" ]]
+    [[ "$output" =~ "exes" ]]
+    [[ "$output" =~ "windows" ]]
+    [[ "$output" =~ "linux" ]]
+    [[ "$output" != *"--shims"* ]]
+    [[ "$output" != *"--system"* ]]
 }
 
-@test "wslutil-setup shows help for unknown option" {
-    run "$WSLUTIL_SETUP" --unknown-option
+@test "wslutil-setup without subcommand prints usage and fails" {
+    run "$WSLUTIL_SETUP"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown option" ]]
-    [[ "$output" =~ "Usage: wslutil-setup" ]]
+    [[ "$output" =~ "exes" ]]
+    [[ "$output" =~ "windows" ]]
+    [[ "$output" =~ "linux" ]]
+}
+
+@test "wslutil-setup unknown subcommand fails" {
+    run "$WSLUTIL_SETUP" bogons
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Unknown" ]] || [[ "$output" =~ "Usage:" ]]
 }
 
 # Test dry-run functionality
@@ -97,7 +106,7 @@ winrun:
     touch "/mnt/c/Windows/System32/curl.exe" 2>/dev/null || true
     touch "/mnt/c/Windows/System32/reg.exe" 2>/dev/null || true
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Processing wslutil configuration" ]]
     [[ "$output" =~ "Processing winrun entries" ]]
@@ -117,7 +126,7 @@ winrun:
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
   - "${WIN_PROGRAMFILES}/TestApp/bin/testapp"'
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Processing wslutil configuration" ]]
     [[ "$output" =~ "Creating direct symlink: testapp" ]]
@@ -131,7 +140,7 @@ winrun:
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
   - "/nonexistent/path/to/app.exe"'
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Skipping missing executable: /nonexistent/path/to/app.exe" ]]
 }
@@ -149,7 +158,7 @@ winrun:
     win_run_target="$(cd "$BATS_TEST_DIRNAME/../bin" && pwd)/win-run"
     ln -s "$win_run_target" "$TEST_SHIMDIR/testexe.exe"
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Symlink already exists: testexe.exe -> $win_run_target (skipping)" ]]
 }
@@ -162,7 +171,7 @@ winrun:
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
   - user-tool.exe'
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$XDG_CONFIG_HOME/wslutil/wslutil.yml" ]]
     [[ "$output" =~ "Creating winrun symlink: user-tool.exe" ]]
@@ -218,7 +227,7 @@ enabled = true"
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
   - cmd.exe'
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Building/updating Windows executable cache" ]]
     [[ "$output" =~ "Building executable cache using Windows PATH" ]]
@@ -232,7 +241,7 @@ enabled = true"
 }
 
 # Test shimdir symlink creation for winrun
-@test "wslutil-setup --shims writes winrun links to XDG shimdir" {
+@test "wslutil-setup exes writes winrun links to XDG shimdir" {
     skip_if_no_yq
 
     # Create wslutil.yml
@@ -241,7 +250,7 @@ enabled = true"
     
     # Run setup (not dry-run to actually create symlinks)
     export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"  # Required to avoid error
-    run "$WSLUTIL_SETUP" --shims
+    run "$WSLUTIL_SETUP" exes
     [ "$status" -eq 0 ]
     
     # Verify symlink was created in the XDG shimdir with an absolute target
@@ -265,7 +274,7 @@ enabled = true"
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
   - test.exe'
     
-    run "$missing_winrun_checkout/bin/wslutil-setup" --shims --dry-run
+    run "$missing_winrun_checkout/bin/wslutil-setup" exes --dry-run
     [ "$status" -eq 0 ]  # Should continue despite error
     [[ "$output" =~ "win-run script not found" ]]
 }
@@ -311,7 +320,7 @@ appendWindowsPath = false"
     # Use factory config (no user wslutil.yml) so WIN_USERPROFILE paths are exercised
     rm -f "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     
-    run "$WSLUTIL_SETUP" --shims --dry-run
+    run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Bootstrapping Windows environment variables via win-env" ]]
     [[ "$output" != *"Could not bootstrap WIN_* via win-env"* ]]
