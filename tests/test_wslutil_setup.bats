@@ -6,6 +6,7 @@ load test_helpers
 setup() {
     setup_test_env
     export WSLUTIL_SETUP="$CHECKOUT_ROOT/bin/wslutil-setup"
+    export WSLUTIL_SETUP_LINUX="$CHECKOUT_ROOT/bin/wslutil-setup-linux"
     export XDG_DATA_HOME="$TEST_TEMP_DIR/.local/share"
     export TEST_SHIMDIR="$XDG_DATA_HOME/wslutil/bin"
     
@@ -26,6 +27,21 @@ setup() {
 
 teardown() {
     cleanup_test_env
+}
+
+# Install a fake sudo that logs its invocation and execs the remaining args
+# directly (no real elevation), so wslutil-setup-linux's re-exec path can be
+# exercised without needing root or prompting for a password.
+setup_fake_sudo() {
+    export WSLUTIL_SUDO_LOG="$TEST_TEMP_DIR/fake-sudo.log"
+    : >"$WSLUTIL_SUDO_LOG"
+    export WSLUTIL_SUDO="$TEST_TEMP_DIR/fake-sudo"
+    cat >"$WSLUTIL_SUDO" <<'EOF'
+#!/bin/bash
+echo "fake-sudo $*" >>"${WSLUTIL_SUDO_LOG:?}"
+exec "$@"
+EOF
+    chmod +x "$WSLUTIL_SUDO"
 }
 
 # Test CLI subcommand contract
@@ -337,4 +353,39 @@ memory=4GB"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Bootstrapping Windows environment variables via win-env" ]]
     [[ "$output" != *"Could not bootstrap WIN_* via win-env"* ]]
+}
+
+# --- wslutil-setup-linux ---
+
+@test "wslutil-setup-linux --help shows usage" {
+    run "$WSLUTIL_SETUP_LINUX" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "wslutil-setup-linux" ]]
+    [[ "$output" =~ "/etc/wsl.conf" ]]
+    [[ "$output" =~ "sudo wslutil-setup-linux" ]]
+}
+
+@test "wslutil setup linux --dry-run merges wsl.conf via fake sudo" {
+    setup_fake_sudo
+
+    create_test_config "$XDG_CONFIG_HOME/wslutil/wsl.conf" "[interop]
+appendWindowsPath = false"
+
+    run "$WSLUTIL_SETUP" linux --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Would merge configuration" ]]
+    [[ "$output" =~ "wsl.conf" ]]
+}
+
+@test "wslutil-setup-linux non-root re-execs via WSLUTIL_SUDO" {
+    if [[ "$EUID" -eq 0 ]]; then
+        skip "test requires non-root EUID"
+    fi
+    setup_fake_sudo
+
+    run "$WSLUTIL_SETUP_LINUX" --dry-run
+    [ "$status" -eq 0 ]
+
+    run grep -q "wslutil-setup-linux" "$WSLUTIL_SUDO_LOG"
+    [ "$status" -eq 0 ]
 }

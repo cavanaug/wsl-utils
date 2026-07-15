@@ -1,0 +1,111 @@
+#!/usr/bin/bash
+# wslutil-setup-linux - Merge factory/user wsl.conf into /etc/wsl.conf (elevated)
+set -euo pipefail
+
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+else
+    echo "wslutil-setup-linux: path helper not found" >&2
+    exit 1
+fi
+if [[ -f "$_wsu_bin/../lib/wslutil-setup-common.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-setup-common.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh"
+else
+    echo "wslutil-setup-linux: setup-common helper not found" >&2
+    exit 1
+fi
+
+show_help() {
+    cat <<EOF
+Usage: wslutil-setup-linux [OPTIONS]
+
+Merge factory and user wsl.conf into /etc/wsl.conf (requires root).
+
+Preferred invocation: sudo wslutil-setup-linux
+
+Options:
+  --dry-run   Show what would be done without making changes
+  --help      Show this help message and exit
+
+Note: The crudini utility is required for configuration file merging.
+      Run 'wslutil doctor' to check for all required dependencies.
+
+EOF
+}
+
+DRY_RUN=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help | -h)
+        show_help
+        exit 0
+        ;;
+    --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        show_help
+        exit 1
+        ;;
+    esac
+done
+
+# Elevate when not root. Test hook: WSLUTIL_SUDO overrides the sudo binary,
+# and WSLUTIL_SETUP_LINUX_ASSUME_ROOT (set on the re-exec) prevents a sudo loop.
+if [[ $EUID -ne 0 && -z "${WSLUTIL_SETUP_LINUX_ASSUME_ROOT:-}" ]]; then
+    sudo_bin="${WSLUTIL_SUDO:-sudo}"
+    args=()
+    [[ $DRY_RUN -eq 1 ]] && args+=(--dry-run)
+    exec "$sudo_bin" -- env WSLUTIL_SETUP_LINUX_ASSUME_ROOT=1 "$_wsu_bin/wslutil-setup-linux" "${args[@]}"
+fi
+
+DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
+
+if [[ $DRY_RUN -eq 1 ]]; then
+    log_info "Running in dry-run mode - no changes will be made"
+fi
+
+require_crudini
+
+merge_linux_from_dir() {
+    local config_dir="$1"
+    local phase_name="$2"
+
+    if [[ ! -d "$config_dir" ]]; then
+        log_info "Config directory not found: $config_dir (skipping $phase_name)"
+        return 0
+    fi
+
+    log_info "=== Phase: $phase_name ==="
+
+    if [[ -f "$config_dir/wsl.conf" ]]; then
+        merge_config_file "$config_dir/wsl.conf" "/etc/wsl.conf" "WSL configuration ($phase_name)"
+    fi
+}
+
+main() {
+    log_info "Starting wslutil-setup-linux"
+    merge_linux_from_dir "$DATADIR/config" "Factory"
+    merge_linux_from_dir "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil" "User"
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        log_info "Dry-run completed - no changes were made"
+    else
+        log_success "Linux WSL configuration setup completed"
+        log_info "Note: Some settings require restarting WSL to take effect"
+    fi
+}
+
+main
