@@ -71,7 +71,8 @@ wslutil uptime                    # Show WSL distro uptime
 |---------|---------|---------|
 | `win-run` | Execute Windows programs with automatic path conversion and encoding | `win-run notepad.exe ~/file.txt` |
 | `win-open` | Open files/folders in Windows Explorer | `win-open .` |
-| `win-browser` | Open URLs in Windows default browser | `win-browser https://example.com` |
+| `win-browser` | Open URLs/files in Windows default browser | `win-browser https://example.com` |
+| `wslview` | Compatibility symlink to `win-browser` (wslu interop) | `wslview https://example.com` |
 | `win-copy` | Copy to Windows clipboard | `echo "text" \| win-copy` |
 | `win-paste` | Paste from Windows clipboard | `win-paste > file.txt` |
 | `win-utf8` | Convert Windows command output encoding | `cmd.exe /c dir \| win-utf8` |
@@ -101,6 +102,7 @@ echo "Linux text" | win-copy      # Works seamlessly with Linux text
 
 - **`win-run`**: Automatically converts Linux paths to Windows paths and ensures UTF-8 output with Unix line endings
 - **`win-copy`/`win-paste`**: Handle character encoding and convert DOS line endings to Unix format, making clipboard data pipeline-ready with Linux commands
+- **`wslview`**: Install-time symlink to `win-browser`, so scripts written for [wslu](https://github.com/wslutilities/wslu)'s `wslview` work transparently with wsl-utils
 
 ## Installation Options
 

@@ -11,6 +11,7 @@
 #  └────────────────────────────────────────────────────────────────────────────────────────────────┘
 #  win-browser
 #   - This script is used to open files, directories, uri's in the default Windows browser from WSL
+#   - Installed as wslview (symlink) for compatibility with scripts that expect wslu's wslview
 #   - It is best used in conjunction with the xdg-utils package and registering as the xdg-open default web-browser
 #   - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windows paths.
 #   - It DOES NOT handle complex arguments typically needed for things like playwright-cli or agent-browser
