@@ -1,6 +1,6 @@
 # Configuration Settings
 
-During the execution of 'wslutil setup' the following configuration files are used to merge settings into os and user configuration files.
+During `wslutil setup exes`, `wslutil setup windows`, or `sudo wslutil-setup-linux`, the following configuration files are used to merge settings into OS and user configuration files.
 
 ## Winutil
 

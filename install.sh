@@ -190,7 +190,9 @@ Next steps:
   2. Load Windows integration in your shell:
        eval "\$(wslutil shellenv)"
   3. Create Windows executable shims:
-       wslutil setup --shims
+       wslutil setup exes
+       # optional: wslutil setup windows
+       # optional: sudo wslutil-setup-linux
   4. Verify your setup:
        wslutil doctor
 EOF

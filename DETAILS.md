@@ -35,12 +35,12 @@ This document provides comprehensive information about wsl-utils configuration, 
 
 **Supported Configuration Files:**
 
-* `wslutil.yml` - Windows executable configuration for `wslutil setup`
+* `wslutil.yml` - Windows executable configuration for `wslutil setup exes`
 * `win-run.yml` - Aliases for `win-run` command
 
 #### Windows Executable Configuration (wslutil.yml)
 
-Controls which Windows executables get symlinked by `wslutil setup`:
+Controls which Windows executables get symlinked by `wslutil setup exes`:
 
 ```yaml
 direct_links:
@@ -78,7 +78,7 @@ aliases:
 **Usage Example:**
 ```bash
 # Using custom config file
-wslutil setup --shims -c ~/.config/wslutil/wslutil.yml
+wslutil setup exes -c ~/.config/wslutil/wslutil.yml
 
 # Win-run will automatically resolve aliases
 win-run brave.exe https://example.com

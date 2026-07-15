@@ -98,7 +98,7 @@ wslutil uptime               # Show WSL distribution uptime (not VM uptime)
 The `win-run` script automatically converts WSL paths to Windows format for any arguments that are existing files or directories using `wslpath -w`.
 
 ### Configuration Format
-The `config/wslutil.yml` file defines Windows executables for shim creation by `wslutil setup`, categorized as:
+The `config/wslutil.yml` file defines Windows executables for shim creation by `wslutil setup exes`, categorized as:
 - Direct links (no argument processing)
 - Shims (processed through `win-run` for path conversion)
 

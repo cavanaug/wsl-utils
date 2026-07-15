@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/cavanaug/wsl-utils/main/install.sh 
 export PATH="$HOME/.local/bin:$PATH"  # if ~/.local/bin is not already on PATH
 wslutil --help
 eval "$(wslutil shellenv)"    # Load Windows integration
-wslutil setup --shims         # Configure Windows executable shims
+wslutil setup exes            # Configure Windows executable shims
 wslutil doctor                # Check system health
 ```
 
@@ -44,7 +44,9 @@ wslutil doctor                # Check system health
 |---------|---------|
 | `wslutil doctor` | Run comprehensive health checks |
 | `wslutil shellenv` | Output shell environment setup commands |
-| `wslutil setup` | Configure system and create Windows executable shims |
+| `wslutil setup exes` | Create Windows executable shims |
+| `wslutil setup windows` | Merge Windows WSL settings (optional) |
+| `wslutil setup linux` | Merge `/etc/wsl.conf` via `sudo wslutil-setup-linux` (optional) |
 | `wslutil upgrade` | Update wsl-utils via git pull |
 | `wslutil uptime` | Show WSL distribution uptime (not VM uptime) |
 
@@ -53,7 +55,7 @@ wslutil doctor                # Check system health
 ```bash
 wslutil doctor                    # Check system health
 eval "$(wslutil shellenv)"        # Set up environment
-wslutil setup --shims             # Create Windows exe shims
+wslutil setup exes                # Create Windows exe shims
 wslutil uptime                    # Show WSL distro uptime
 ```
 
@@ -128,7 +130,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 echo 'if command -v wslutil >/dev/null 2>&1; then eval "$(wslutil shellenv)"; fi' >> ~/.bashrc
 
 # Create Windows executable shims
-PATH="$HOME/.local/bin:$PATH" wslutil setup --shims
+PATH="$HOME/.local/bin:$PATH" wslutil setup exes
 
 # Reload shell
 source ~/.bashrc
@@ -140,7 +142,7 @@ source ~/.bashrc
 
 ```bash
 wslutil doctor                    # Health check
-wslutil setup --shims             # Configure Windows executable shims
+wslutil setup exes                # Configure Windows executable shims
 win-run <windows-exe> [args]      # Run Windows programs
 win-open <path>                   # Open in Explorer
 ```
@@ -170,7 +172,7 @@ wslutil uptime --since            # Show when WSL distro started
 
 - 📖 **[Detailed Documentation](DETAILS.md)** - Comprehensive configuration, advanced usage, and troubleshooting
 - 🔧 **Run `wslutil doctor`** to verify your setup
-- ⚙️ **Run `wslutil setup --shims`** to configure Windows executable shims
+- ⚙️ **Run `wslutil setup exes`** to configure Windows executable shims (optional: `wslutil setup windows`, `sudo wslutil-setup-linux`)
 - 🧪 **Test integration** with `win-run notepad.exe` or `win-open .`
 
 ## Support

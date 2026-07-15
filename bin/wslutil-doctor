@@ -486,7 +486,8 @@ else
     fi
     if [ "$FILE_CONTENT_PASSED" -gt 0 ] || [ "$WARNINGS" -gt 0 ]; then
         printf "\n  # ${GREEN}Tip:${RESET} Your /etc/wsl.conf may need setup or cleanup. You can run:\n"
-        printf "  ${GREEN}wslutil setup${RESET}\n"
+        printf "  ${GREEN}wslutil setup exes${RESET}\n"
+        printf "  # optional: ${GREEN}wslutil setup windows${RESET}; ${GREEN}sudo wslutil-setup-linux${RESET}\n"
     fi
     printf "\n"
 fi
