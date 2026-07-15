@@ -107,6 +107,11 @@ if [[ -z "$SUBCOMMAND" ]]; then
     exit 1
 fi
 
+if [[ -n "$CUSTOM_CONFIG_FILE" && "$SUBCOMMAND" != exes ]]; then
+    echo "Error: -c/--config is only valid with the exes subcommand" >&2
+    exit 1
+fi
+
 # Check if running in dry-run mode
 if [[ $DRY_RUN -eq 1 ]]; then
     log_info "Running in dry-run mode - no changes will be made"

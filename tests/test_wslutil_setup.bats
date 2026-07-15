@@ -54,6 +54,16 @@ teardown() {
     [[ "$output" =~ "Unknown" ]] || [[ "$output" =~ "Usage:" ]]
 }
 
+@test "wslutil-setup rejects -c/--config for non-exes subcommands" {
+    config_file="$TEST_TEMP_DIR/custom-wslutil.yml"
+    create_test_config "$config_file" 'winexe:
+  - cmd.exe'
+
+    run "$WSLUTIL_SETUP" windows -c "$config_file"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "only valid with the exes subcommand" ]]
+}
+
 # Test dry-run functionality
 @test "wslutil-setup windows --dry-run shows what would be done" {
     # Create a minimal Windows profile config file
