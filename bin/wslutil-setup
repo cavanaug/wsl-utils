@@ -39,31 +39,22 @@ SHIMDIR="$(wslutil_shimdir)"
 
 show_help() {
     cat <<EOF
-Usage: wslutil-setup [OPTIONS]
+Usage: wslutil-setup <exes|windows|linux> [OPTIONS]
 
-Configure and merge wslutil settings into system configuration files.
-
-This command performs the following configuration merging:
-- wslutil.yml: Creates Windows executable shims in the XDG shim directory
-- wsl.conf: Merges settings into /etc/wsl.conf
-- wslconfig: Merges settings into \${WIN_USERPROFILE}/.wslconfig
-- wslgconfig: Merges settings into \${WIN_USERPROFILE}/.wslgconfig
+  exes      Create winexe/winrun links in the XDG data bin directory (user)
+  windows   Merge .wslconfig and .wslgconfig into the Windows user profile (user)
+  linux     Merge /etc/wsl.conf (elevated; execs wslutil-setup-linux)
 
 Options:
-  --shims          Create Windows executable shims only
-  --system         Merge system and Windows WSL configuration only
-  --dry-run         Show what would be done without making changes
-  -c, --config FILE Use custom config file instead of default wslutil.yml
-  --help            Show this help message and exit
+  --dry-run          Show what would be done without making changes
+  -c, --config FILE  (exes only) Use custom wslutil.yml
+  --help             Show this help message and exit
 
 Examples:
-  wslutil-setup                          # Create shims, then merge system config
-  wslutil-setup --shims                  # Create/update shims only
-  wslutil-setup --system                 # Merge system/Windows config only
-  wslutil-setup --dry-run                # Preview changes without applying
-  wslutil-setup -c /path/to/my-config.yml      # Use custom config file
-  wslutil-setup --config ./project-config.yml # Use custom config file
-  wslutil-setup --help                   # Show this help message
+  wslutil setup exes
+  wslutil setup windows
+  wslutil setup linux
+  sudo wslutil-setup-linux
 
 Note: The crudini utility is required for configuration file merging.
       Run 'wslutil doctor' to check for all required dependencies.
@@ -74,53 +65,46 @@ EOF
 # Parse command line arguments
 DRY_RUN=0
 CUSTOM_CONFIG_FILE=""
-RUN_SHIMS=0
-RUN_SYSTEM=0
-MODE_SPECIFIED=0
+SUBCOMMAND=""
+
+# Parse: allow --help/-h anywhere; subcommand is exes|windows|linux
 while [[ $# -gt 0 ]]; do
-    case $1 in
-    --shims)
-        RUN_SHIMS=1
-        MODE_SPECIFIED=1
-        shift
-        ;;
-    --system)
-        RUN_SYSTEM=1
-        MODE_SPECIFIED=1
-        shift
+    case "$1" in
+    --help | -h)
+        show_help
+        exit 0
         ;;
     --dry-run)
         DRY_RUN=1
         shift
         ;;
     -c | --config)
-        if [[ -z "$2" ]]; then
-            echo "Error: -c/--config option requires a config file argument" >&2
-            show_help
+        [[ -n "${2:-}" && -f "$2" ]] || {
+            echo "Error: -c/--config requires an existing file" >&2
             exit 1
-        fi
-        if [[ ! -f "$2" ]]; then
-            echo "Error: Config file '$2' does not exist" >&2
-            exit 1
-        fi
+        }
         CUSTOM_CONFIG_FILE="$2"
         shift 2
         ;;
-    --help)
-        show_help
-        exit 0
+    exes | windows | linux)
+        [[ -z "$SUBCOMMAND" ]] || {
+            echo "Error: multiple subcommands" >&2
+            exit 1
+        }
+        SUBCOMMAND="$1"
+        shift
         ;;
     *)
-        echo "Unknown option: $1"
+        echo "Unknown option or subcommand: $1" >&2
         show_help
         exit 1
         ;;
     esac
 done
 
-if [[ $MODE_SPECIFIED -eq 0 ]]; then
-    RUN_SHIMS=1
-    RUN_SYSTEM=1
+if [[ -z "$SUBCOMMAND" ]]; then
+    show_help
+    exit 1
 fi
 
 # Check if running in dry-run mode
@@ -395,8 +379,8 @@ select_shim_config_file() {
     echo "$DATADIR/config/wslutil.yml"
 }
 
-# Function to process system configuration files from a given directory
-process_system_config_directory() {
+# Function to merge Windows profile config files (.wslconfig/.wslgconfig) from a given directory
+merge_windows_from_dir() {
     local config_dir="$1"
     local phase_name="$2"
 
@@ -408,25 +392,21 @@ process_system_config_directory() {
     log_info "=== Phase: $phase_name ==="
     log_info "Processing configuration files from: $config_dir"
 
-    # Merge wsl.conf into /etc/wsl.conf
-    if [[ -f "$config_dir/wsl.conf" ]]; then
-        merge_config_file "$config_dir/wsl.conf" "/etc/wsl.conf" "WSL configuration ($phase_name)"
-    fi
-
     # Check if WIN_USERPROFILE is set for Windows config files
     if [[ -z "${WIN_USERPROFILE:-}" ]]; then
         log_warning "WIN_USERPROFILE not set - skipping Windows config files for $phase_name"
         log_warning "Please run 'win-env --refresh' or check Windows interop"
-    else
-        # Merge wslconfig into Windows user profile
-        if [[ -f "$config_dir/wslconfig" ]]; then
-            merge_config_file "$config_dir/wslconfig" "$WIN_USERPROFILE/.wslconfig" "WSL2 configuration ($phase_name)"
-        fi
+        return 0
+    fi
 
-        # Merge wslgconfig into Windows user profile
-        if [[ -f "$config_dir/wslgconfig" ]]; then
-            merge_config_file "$config_dir/wslgconfig" "$WIN_USERPROFILE/.wslgconfig" "WSLg configuration ($phase_name)"
-        fi
+    # Merge wslconfig into Windows user profile
+    if [[ -f "$config_dir/wslconfig" ]]; then
+        merge_config_file "$config_dir/wslconfig" "$WIN_USERPROFILE/.wslconfig" "WSL2 configuration ($phase_name)"
+    fi
+
+    # Merge wslgconfig into Windows user profile
+    if [[ -f "$config_dir/wslgconfig" ]]; then
+        merge_config_file "$config_dir/wslgconfig" "$WIN_USERPROFILE/.wslgconfig" "WSLg configuration ($phase_name)"
     fi
 }
 
@@ -440,29 +420,31 @@ process_shims() {
     process_winutil_config "$shim_config_file"
 }
 
-process_system_configs() {
+process_windows() {
     bootstrap_win_env_if_needed
     require_crudini
-
-    # Phase 1: Process system/default configuration files
-    process_system_config_directory "$DATADIR/config" "System Configuration"
-
-    # Phase 2: Process user-specific configuration files
-    local user_config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/wslutil"
-    process_system_config_directory "$user_config_dir" "User Configuration"
+    merge_windows_from_dir "$DATADIR/config" "Factory"
+    merge_windows_from_dir "${XDG_CONFIG_HOME:-$HOME/.config}/wslutil" "User"
 }
 
 # Main setup process
 main() {
     log_info "Starting wslutil configuration setup"
 
-    if [[ $RUN_SHIMS -eq 1 ]]; then
-        process_shims
-    fi
-
-    if [[ $RUN_SYSTEM -eq 1 ]]; then
-        process_system_configs
-    fi
+    case "$SUBCOMMAND" in
+    exes) process_shims ;;
+    windows) process_windows ;;
+    linux)
+        linux_script="${_wsu_bin}/wslutil-setup-linux"
+        if [[ ! -x "$linux_script" ]]; then
+            log_error "wslutil-setup-linux not found: $linux_script"
+            exit 1
+        fi
+        args=()
+        [[ $DRY_RUN -eq 1 ]] && args+=(--dry-run)
+        exec "$linux_script" "${args[@]}"
+        ;;
+    esac
 
     if [[ $DRY_RUN -eq 1 ]]; then
         log_info "Dry-run completed - no changes were made"

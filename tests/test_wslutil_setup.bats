@@ -55,12 +55,13 @@ teardown() {
 }
 
 # Test dry-run functionality
-@test "wslutil-setup --dry-run shows what would be done" {
-    # Create a minimal config file
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wsl.conf" "[interop]
-appendWindowsPath = false"
+@test "wslutil-setup windows --dry-run shows what would be done" {
+    # Create a minimal Windows profile config file
+    export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"
+    create_test_config "$XDG_CONFIG_HOME/wslutil/wslconfig" "[wsl2]
+memory=4GB"
     
-    run "$WSLUTIL_SETUP" --system --dry-run
+    run "$WSLUTIL_SETUP" windows --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running in dry-run mode" ]]
     [[ "$output" =~ "Would merge configuration" ]]
@@ -75,7 +76,7 @@ appendWindowsPath = false"
     ln -s "$(command -v dirname)" "$TEST_TEMP_DIR/empty-path/dirname"
     export PATH="$TEST_TEMP_DIR/empty-path"
     
-    run "$WSLUTIL_SETUP" --system
+    run "$WSLUTIL_SETUP" windows
     export PATH="$old_path"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "crudini is required but not installed" ]]
@@ -269,6 +270,7 @@ enabled = true"
     mkdir -p "$missing_winrun_checkout/bin" "$missing_winrun_checkout/config" "$missing_winrun_checkout/env" "$missing_winrun_checkout/lib"
     cp "$BATS_TEST_DIRNAME/../bin/wslutil-setup" "$missing_winrun_checkout/bin/wslutil-setup"
     cp "$BATS_TEST_DIRNAME/../lib/wslutil-paths.sh" "$missing_winrun_checkout/lib/wslutil-paths.sh"
+    cp "$BATS_TEST_DIRNAME/../lib/wslutil-setup-common.sh" "$missing_winrun_checkout/lib/wslutil-setup-common.sh"
     
     # Create wslutil.yml with winrun entry
     create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
@@ -283,8 +285,9 @@ enabled = true"
 @test "wslutil-setup handles missing config directories gracefully" {
     # Don't create any config directories
     rm -rf "$XDG_CONFIG_HOME/wslutil"
+    export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"
     
-    run "$WSLUTIL_SETUP" --system --dry-run
+    run "$WSLUTIL_SETUP" windows --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Config directory not found" ]]
     [[ "$output" =~ "skipping" ]]
@@ -292,14 +295,14 @@ enabled = true"
 
 # Test missing WIN_USERPROFILE handling when bootstrap cannot load shellenv
 @test "wslutil-setup handles missing WIN_USERPROFILE gracefully" {
-    # Create minimal system config
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wsl.conf" "[interop]
-appendWindowsPath = false"
+    # Create minimal Windows profile config
+    create_test_config "$XDG_CONFIG_HOME/wslutil/wslconfig" "[wsl2]
+memory=4GB"
     
     # Unset WIN_* so bootstrap runs
     unset WIN_USERPROFILE WIN_WINDIR
     
-    run "$WSLUTIL_SETUP" --system --dry-run
+    run "$WSLUTIL_SETUP" windows --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Bootstrapping Windows environment variables via win-env" ]]
     if is_wsl; then
