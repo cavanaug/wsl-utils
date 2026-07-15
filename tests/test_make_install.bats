@@ -15,10 +15,13 @@ teardown() {
     run make -C "$BATS_TEST_DIRNAME/.." install PREFIX="$PREFIX"
     [ "$status" -eq 0 ]
     [ -x "$PREFIX/bin/wslutil" ]
+    [ -x "$PREFIX/bin/wslutil-setup" ]
+    [ -x "$PREFIX/bin/wslutil-setup-linux" ]
     [ -x "$PREFIX/bin/win-env" ]
     [ -f "$PREFIX/share/wslutil/config/wslutil.yml" ]
     [ -f "$PREFIX/share/wslutil/env/shellenv.bash" ]
     [ -f "$PREFIX/share/wslutil/lib/wslutil-paths.sh" ]
+    [ -f "$PREFIX/share/wslutil/lib/wslutil-setup-common.sh" ]
     [ -f "$PREFIX/share/wslutil/VERSION" ]
     [ -L "$PREFIX/bin/wslview" ] || [ -f "$PREFIX/bin/wslview" ]
 }
