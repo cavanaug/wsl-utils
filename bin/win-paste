@@ -82,6 +82,8 @@ else
 fi
 
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
+# Overridable for tests; production default is the WSLg binary.
+WL_PASTE=${WL_PASTE:-/usr/bin/wl-paste}
 
 RAW=0
 FILE_MODE="" # url|path|atpath|empty
@@ -175,15 +177,33 @@ ps_try_image_png() {
 }
 
 wl_list_types() {
-    /usr/bin/wl-paste -l 2>/dev/null || true
+    "$WL_PASTE" -l 2>/dev/null || true
 }
 
 wl_try_mime() {
     local mime="$1" out="$2"
-    /usr/bin/wl-paste -n -t "$mime" >"$out" 2>/dev/null && [[ -s "$out" ]]
+    "$WL_PASTE" -n -t "$mime" >"$out" 2>/dev/null && [[ -s "$out" ]]
 }
 
-# WSLg richest ladder: image/png → text/html → text/plain (aligned with PS)
+# Try image MIME ladder (png → jpeg → gif → webp). Sets KIND/EXT; writes to $2.
+wl_try_richest_image() {
+    local types="$1" out="$2" mime
+    for mime in image/png image/jpeg image/gif image/webp; do
+        if printf '%s\n' "$types" | grep -qx "$mime" && wl_try_mime "$mime" "$out"; then
+            KIND=image
+            case "$mime" in
+                image/png) EXT=png ;;
+                image/jpeg) EXT=jpg ;;
+                image/gif) EXT=gif ;;
+                image/webp) EXT=webp ;;
+            esac
+            return 0
+        fi
+    done
+    return 1
+}
+
+# WSLg richest ladder: image → text/html → text/plain (aligned with PS)
 wl_fetch_clipboard_payload() {
     local format="${1:-}" tmp types
     tmp="$(mktemp)"
@@ -237,10 +257,8 @@ wl_fetch_clipboard_payload() {
         esac
     fi
 
-    if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$tmp"; then
+    if wl_try_richest_image "$types" "$tmp"; then
         PAYLOAD_FILE="$tmp"
-        KIND=image
-        EXT=png
         return 0
     fi
     if printf '%s\n' "$types" | grep -qx 'text/html' && wl_try_mime text/html "$tmp"; then
@@ -341,7 +359,7 @@ ps_fetch_clipboard_payload() {
 
 fetch_clipboard_payload() {
     local format="${1:-}"
-    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-paste ]]; then
+    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]; then
         wl_fetch_clipboard_payload "$format"
     else
         ps_fetch_clipboard_payload "$format"
@@ -363,12 +381,12 @@ if [[ -n "$FILE_MODE" ]]; then
 fi
 
 paste_clipboard() {
-    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-paste ]]; then
+    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]; then
         if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
             mkdir -p ${HOME}/.local/state/wslutil
-            echo "$(date --rfc-3339=s) - /usr/bin/wl-paste [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
+            echo "$(date --rfc-3339=s) - $WL_PASTE [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
         fi
-        /usr/bin/wl-paste -n "$@"
+        "$WL_PASTE" -n "$@"
     else
         if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
             mkdir -p ${HOME}/.local/state/wslutil

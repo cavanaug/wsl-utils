@@ -154,3 +154,60 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
 }
+
+@test "win-paste --format png materializes image" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'ignore-text' >"$WIN_PASTE_FIXTURE"
+    export WIN_PASTE_IMAGE_FIXTURE="$TEST_TEMP_DIR/clip.png"
+    printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' >"$WIN_PASTE_IMAGE_FIXTURE"
+
+    run win-paste --file-path --format png
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
+}
+
+@test "win-paste --format jpeg errors with use png hint" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'nope' >"$WIN_PASTE_FIXTURE"
+
+    run win-paste --file-path --format jpeg
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ use\ png || "$stderr" =~ use\ png ]]
+}
+
+@test "win-paste WSLg path materializes jpeg via wl-paste ladder" {
+    export WSL2_GUI_APPS_ENABLED=1
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WL_PASTE="$TEST_TEMP_DIR/fake-wl-paste"
+
+    cat >"$WL_PASTE" <<'EOF'
+#!/bin/bash
+# Test double: jpeg-only clipboard (no PNG) to exercise MIME ladder.
+if [[ "$1" == "-l" ]]; then
+    printf 'image/jpeg\ntext/plain\n'
+    exit 0
+fi
+# wl_try_mime uses: wl-paste -n -t <mime>
+mime=""
+prev=""
+for a in "$@"; do
+    if [[ "$prev" == "-t" || "$prev" == "--type" ]]; then
+        mime="$a"
+    fi
+    prev="$a"
+done
+if [[ "$mime" == "image/jpeg" ]]; then
+    printf 'fake-jpeg-bytes'
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$WL_PASTE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ -image-[0-9a-f]{12}\.jpg$ ]]
+    [ "$(cat "$output")" = "fake-jpeg-bytes" ]
+}
