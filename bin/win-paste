@@ -160,8 +160,109 @@ ps_try_html() {
         >"$out" 2>/dev/null
 }
 
+# Returns 0 and writes PNG bytes to $1 when clipboard has an image
+ps_try_image_png() {
+    local out="$1" win_out
+    if command -v wslpath >/dev/null 2>&1; then
+        win_out="$(wslpath -w "$out")"
+    else
+        win_out="$out"
+    fi
+    WIN_PASTE_OUT="$win_out" "$(powershell_bin)" -NoProfile -Command \
+        'Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $img=[Windows.Forms.Clipboard]::GetImage(); if($null -eq $img){exit 1}; $img.Save($env:WIN_PASTE_OUT,[Drawing.Imaging.ImageFormat]::Png)' \
+        2>/dev/null
+    [[ -s "$out" ]]
+}
+
+wl_list_types() {
+    /usr/bin/wl-paste -l 2>/dev/null || true
+}
+
+wl_try_mime() {
+    local mime="$1" out="$2"
+    /usr/bin/wl-paste -n -t "$mime" >"$out" 2>/dev/null && [[ -s "$out" ]]
+}
+
+# WSLg richest ladder: image/png → text/html → text/plain (aligned with PS)
+wl_fetch_clipboard_payload() {
+    local format="${1:-}" tmp types
+    tmp="$(mktemp)"
+    types="$(wl_list_types)"
+
+    if [[ -n "$format" ]]; then
+        case "$format" in
+            txt)
+                wl_try_mime text/plain "$tmp" || {
+                    rm -f "$tmp"
+                    echo "win-paste: no text on clipboard" >&2
+                    return 1
+                }
+                sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
+                PAYLOAD_FILE="$tmp"
+                KIND=text
+                EXT=txt
+                return 0
+                ;;
+            html)
+                wl_try_mime text/html "$tmp" || {
+                    rm -f "$tmp"
+                    echo "win-paste: no HTML on clipboard" >&2
+                    return 1
+                }
+                PAYLOAD_FILE="$tmp"
+                KIND=html
+                EXT=html
+                return 0
+                ;;
+            png)
+                if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$tmp"; then
+                    PAYLOAD_FILE="$tmp"
+                    KIND=image
+                    EXT=png
+                    return 0
+                fi
+                rm -f "$tmp"
+                echo "win-paste: no image on clipboard" >&2
+                return 1
+                ;;
+            jpeg | jpg | gif | webp)
+                rm -f "$tmp"
+                echo "win-paste: --format $format not supported yet (use png)" >&2
+                return 1
+                ;;
+            *)
+                rm -f "$tmp"
+                return 1
+                ;;
+        esac
+    fi
+
+    if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$tmp"; then
+        PAYLOAD_FILE="$tmp"
+        KIND=image
+        EXT=png
+        return 0
+    fi
+    if printf '%s\n' "$types" | grep -qx 'text/html' && wl_try_mime text/html "$tmp"; then
+        PAYLOAD_FILE="$tmp"
+        KIND=html
+        EXT=html
+        return 0
+    fi
+    if wl_try_mime text/plain "$tmp"; then
+        sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
+        PAYLOAD_FILE="$tmp"
+        KIND=text
+        EXT=txt
+        return 0
+    fi
+    rm -f "$tmp"
+    echo "win-paste: clipboard empty or unsupported" >&2
+    return 1
+}
+
 # Sets globals PAYLOAD_FILE KIND EXT via temp file. format is optional.
-fetch_clipboard_payload() {
+ps_fetch_clipboard_payload() {
     local format="${1:-}" tmp
     tmp="$(mktemp)"
     if [[ -n "$format" ]]; then
@@ -190,9 +291,20 @@ fetch_clipboard_payload() {
                 EXT=html
                 return 0
                 ;;
-            png | jpeg | jpg | gif | webp)
-                echo "win-paste: image formats require image clipboard support" >&2
+            png)
+                ps_try_image_png "$tmp" || {
+                    rm -f "$tmp"
+                    echo "win-paste: no image on clipboard" >&2
+                    return 1
+                }
+                PAYLOAD_FILE="$tmp"
+                KIND=image
+                EXT=png
+                return 0
+                ;;
+            jpeg | jpg | gif | webp)
                 rm -f "$tmp"
+                echo "win-paste: --format $format not supported yet (use png)" >&2
                 return 1
                 ;;
             *)
@@ -202,7 +314,13 @@ fetch_clipboard_payload() {
         esac
     fi
 
-    # richest: prefer html over text for now; Task 4 inserts image first
+    # richest: image → html → text
+    if ps_try_image_png "$tmp"; then
+        PAYLOAD_FILE="$tmp"
+        KIND=image
+        EXT=png
+        return 0
+    fi
     if ps_try_html "$tmp"; then
         PAYLOAD_FILE="$tmp"
         KIND=html
@@ -219,6 +337,15 @@ fetch_clipboard_payload() {
     rm -f "$tmp"
     echo "win-paste: clipboard empty or unsupported" >&2
     return 1
+}
+
+fetch_clipboard_payload() {
+    local format="${1:-}"
+    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-paste ]]; then
+        wl_fetch_clipboard_payload "$format"
+    else
+        ps_fetch_clipboard_payload "$format"
+    fi
 }
 
 materialize_clipboard_and_emit() {

@@ -24,9 +24,17 @@ if [[ "$args" == *Get-Clipboard*Html* ]] || [[ "$args" == *TextFormat.Html* ]]; 
     fi
     exit 1
 fi
-if [[ "$args" == *Format*Image* ]] || [[ "$args" == *Get-Clipboard*Image* ]]; then
-    if [[ -n "${WIN_PASTE_IMAGE_FIXTURE:-}" && -f "${WIN_PASTE_IMAGE_FIXTURE}" ]]; then
-        cat "${WIN_PASTE_IMAGE_FIXTURE}"
+# Image save: real command uses Clipboard::GetImage + WIN_PASTE_OUT
+if [[ "$args" == *GetImage* ]] || [[ "$args" == *ImageFormat* ]]; then
+    if [[ -n "${WIN_PASTE_IMAGE_FIXTURE:-}" && -f "${WIN_PASTE_IMAGE_FIXTURE}" && -n "${WIN_PASTE_OUT:-}" ]]; then
+        dest="${WIN_PASTE_OUT}"
+        # wslpath -w yields \\wsl.localhost\Distro\...; map back for bash cp
+        case "$dest" in
+            \\\\wsl.localhost\\*|\\\\wsl\$\\*)
+                dest="$(printf '%s\n' "$dest" | sed -E 's/^\\\\wsl(\.localhost|\$)\\[^\\]+//; s/\\/\//g')"
+                ;;
+        esac
+        cp "${WIN_PASTE_IMAGE_FIXTURE}" "$dest"
         exit 0
     fi
     exit 1
@@ -132,4 +140,17 @@ teardown() {
 
     run win-paste --file-path --format html
     [ "$status" -ne 0 ]
+}
+
+@test "win-paste --file-path prefers image when fixture present" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'ignore-text' >"$WIN_PASTE_FIXTURE"
+    export WIN_PASTE_IMAGE_FIXTURE="$TEST_TEMP_DIR/clip.png"
+    # 1x1 PNG
+    printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' >"$WIN_PASTE_IMAGE_FIXTURE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
 }
