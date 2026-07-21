@@ -170,6 +170,10 @@ wslutil uptime --pretty           # Human-readable format
 wslutil uptime --since            # Show when WSL distro started
 ```
 
+## Configuration
+
+Windows executable shims and `win-run` path/options share a single `wslutil.yml` config with an `exes` map (`mode: direct | shim | none`). Factory settings ship with wsl-utils; add deltas in `~/.config/wslutil/wslutil.yml`. See [DETAILS.md](DETAILS.md#windows-executable-configuration-wslutilyml) for schema, merge rules, and migration from old `winexe`/`winrun`/`win-run.yml` formats.
+
 ## Next Steps
 
 - 📖 **[Detailed Documentation](DETAILS.md)** - Comprehensive configuration, advanced usage, and troubleshooting

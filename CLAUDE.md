@@ -98,9 +98,12 @@ wslutil uptime               # Show WSL distribution uptime (not VM uptime)
 The `win-run` script automatically converts WSL paths to Windows format for any arguments that are existing files or directories using `wslpath -w`.
 
 ### Configuration Format
-The `config/wslutil.yml` file defines Windows executables for shim creation by `wslutil setup exes`, categorized as:
-- Direct links (no argument processing)
-- Shims (processed through `win-run` for path conversion)
+The `config/wslutil.yml` file defines Windows executables under an `exes` map for `wslutil setup exes` and `win-run`:
+- `mode: direct` — direct symlink to Windows executable (no `win-run` overhead)
+- `mode: shim` — symlink through `win-run` for path conversion and UTF-8 processing
+- `mode: none` — no PATH link; `win-run` only (removes prior link on `setup exes`)
+
+Factory and user `wslutil.yml` files are merged by name; user entries replace whole factory entries for matching keys.
 
 ### Extensibility
 Custom subcommands can be added by creating executable `wslutil-<name>` scripts in PATH. They will be automatically discovered and available as `wslutil <name>`.
@@ -138,16 +141,18 @@ The project uses BATS (Bash Automated Testing System) for comprehensive testing.
 ## Configuration System Architecture
 
 ### wslutil-setup Symlink Management
-The `wslutil-setup` command processes `config/wslutil.yml` to create Windows executable symlinks:
+The `wslutil-setup` command processes `config/wslutil.yml` `exes` entries to create Windows executable symlinks:
 
-**winexe entries**: Direct symlinks to Windows executables for performance
-**winrun entries**: Symlinks to `win-run` script for path conversion and UTF-8 processing
+**`mode: direct`**: Direct symlinks to Windows executables for performance
+**`mode: shim`**: Symlinks to `win-run` script for path conversion and UTF-8 processing
+**`mode: none`**: Skip PATH link; remove existing shim if present
 
 The setup process:
-1. Builds Windows executable cache from PATH using PowerShell
-2. Falls back to `Get-Command` for executables not in PATH
-3. Handles Windows line endings and path conversion automatically
-4. Supports environment variable expansion (`${WIN_PROGRAMFILES}`, etc.)
+1. Loads factory + user `wslutil.yml` (merge-by-name), or a single file with `-c`
+2. Builds Windows executable cache from PATH using PowerShell
+3. Falls back to `Get-Command` for executables not in PATH
+4. Handles Windows line endings and path conversion automatically
+5. Supports environment variable expansion (`${WIN_PROGRAMFILES}`, etc.)
 
 ### PowerShell Integration
 All PowerShell calls use `-NoProfile` flag for:
@@ -156,18 +161,17 @@ All PowerShell calls use `-NoProfile` flag for:
 - Predictable scripting environment
 
 ### win-run Architecture
-- **Alias Resolution**: YAML-based config hierarchy (global → user → custom)
+- **Config resolution**: Shared `wslutil.yml` `exes` map (factory → user merge-by-name, or `-c` for one file)
 - **Path Conversion**: Automatic WSL-to-Windows path conversion for files/directories
 - **UTF-8 Processing**: Intelligent encoding detection and conversion (UTF-16LE to UTF-8)
-- **Environment Variables**: Full expansion support in alias configurations
+- **Environment Variables**: Full expansion support in `path` and `options` fields
 
 ### User Configuration System
 The system supports user-specific configurations in `~/.config/wslutil/`:
 
-- **wslutil.yml**: User-specific Windows executable symlinks (winrun/winexe entries)
-- **win-run.yml**: User-specific aliases and configurations
+- **wslutil.yml**: User deltas for `exes` entries (merge-by-name with factory)
 - **wsl.conf**: User WSL settings (merged into /etc/wsl.conf)
 - **wslconfig**: User WSL2 settings (merged into Windows user profile)
 - **wslgconfig**: User WSLg settings (merged into Windows user profile)
 
-Configuration hierarchy: System configs processed first, then user configs override defaults.
+Configuration hierarchy: Factory configs processed first, then user configs override by name (for `wslutil.yml`) or merge sections (for INI files).

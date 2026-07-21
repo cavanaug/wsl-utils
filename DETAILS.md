@@ -35,53 +35,76 @@ This document provides comprehensive information about wsl-utils configuration, 
 
 **Supported Configuration Files:**
 
-* `wslutil.yml` - Windows executable configuration for `wslutil setup exes`
-* `win-run.yml` - Aliases for `win-run` command
+* `wslutil.yml` - Windows executable configuration for `wslutil setup exes` and `win-run`
 
 #### Windows Executable Configuration (wslutil.yml)
 
-Controls which Windows executables get symlinked by `wslutil setup exes`:
+A single `wslutil.yml` file drives both PATH symlinks (`wslutil setup exes`) and runtime path/options resolution (`win-run`). Factory and user configs are merged **by name**: factory entries are loaded first, then user entries replace whole entries for matching keys.
+
+**Locations:**
+
+1. **Factory:** `${PREFIX}/share/wslutil/config/wslutil.yml` (or `config/wslutil.yml` in a checkout)
+2. **User:** `${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/wslutil.yml` (delta overrides only)
+
+**Schema:**
 
 ```yaml
-direct_links:
-  - cmd.exe
-  - ipconfig.exe
-  - ping.exe
-
-shims:
-  - notepad.exe
-  - explorer.exe
+exes:
+  <name>:
+    mode: direct | shim | none   # required
+    path: <string>               # optional; supports ${WIN_*} expansion
+    options: <string> | null     # optional; prepended by win-run only
 ```
 
-**Categories:**
-- **direct_links**: Create direct symlinks to Windows executables
-- **shims**: Create symlinks that route through `win-run` for path conversion
+| `mode` | `setup exes` (PATH link) | Runtime (`win-run`) |
+|--------|--------------------------|---------------------|
+| `direct` | Symlink `$SHIMDIR/<name>` → Windows exe | Not used (invoked directly) |
+| `shim` | Symlink `$SHIMDIR/<name>` → `win-run` | Path convert + UTF-8; uses `path` / `options` if set |
+| `none` | No link; **removes** existing `$SHIMDIR/<name>` if present | `win-run <name>` only; prefers `path` when set |
 
-#### Win-Run Aliases (win-run.yml)
+When `path` is omitted, `setup exes` discovers the Windows executable via PATH cache / `Get-Command`; `win-run` uses the bare command name.
 
-Define custom aliases for Windows applications:
+**User override example** (`~/.config/wslutil/wslutil.yml`):
 
 ```yaml
-aliases:
-  brave.exe:
-    path: ${WIN_PROGRAMFILES}/BraveSoftware/Brave-Browser/Application/brave.exe
-    options: null
-  devenv.exe:
-    path: ${WIN_PROGRAMFILES}/Microsoft Visual Studio/2022/Community/Common7/IDE/devenv.exe
-    options: "--startup-option"
+exes:
+  notepad++.exe:
+    mode: shim
+    path: ${WIN_PROGRAMFILES}/Notepad++/notepad++.exe
+  mytool.exe:
+    mode: none
+    path: ${WIN_USERPROFILE}/tools/mytool.exe
+    options: "--quiet"
+  # Disable a factory PATH link without editing factory config:
+  cmd.exe:
+    mode: none
 ```
 
-**Fields:**
-- **path**: Full path to the Windows executable (supports environment variable expansion)
-- **options**: Additional command-line options to prepend (optional)
+**Custom config file** (`-c` / `--config`): loads that file only — no factory+user merge.
 
-**Usage Example:**
+**Migration from old schemas:**
+
+| Old | New |
+|-----|-----|
+| `winexe: [cmd.exe]` | `exes.cmd.exe: { mode: direct }` |
+| `winexe: ["${…}/brave.exe"]` | `exes.brave.exe: { mode: direct, path: "${…}/brave.exe" }` |
+| `winrun: [notepad.exe]` | `exes.notepad.exe: { mode: shim }` |
+| `aliases.foo.path` / `options` in `win-run.yml` | `exes.foo: { mode: none, path, options }` (or `shim`/`direct` if a PATH link is desired) |
+
+Old `winexe` / `winrun` / `aliases` keys and `win-run.yml` are no longer read. If `~/.config/wslutil/win-run.yml` still exists, `win-run` and `setup exes` warn that entries should be moved into `wslutil.yml`.
+
+**Usage examples:**
+
 ```bash
-# Using custom config file
+# Create/update PATH symlinks from merged config
+wslutil setup exes
+
+# Use a single config file (no merge)
 wslutil setup exes -c ~/.config/wslutil/wslutil.yml
 
-# Win-run will automatically resolve aliases
+# win-run resolves path/options from the same merged config
 win-run brave.exe https://example.com
+win-run -c project.yml custom-tool.exe
 ```
 
 ## Advanced Features
@@ -152,11 +175,12 @@ Usage: `wslutil mycommand`
 
 **Custom Windows Integration:**
 
-Create aliases in `win-run.yml` for Windows applications:
+Add entries under `exes` in `~/.config/wslutil/wslutil.yml`:
 
 ```yaml
-aliases:
+exes:
   myapp.exe:
+    mode: none
     path: ${WIN_PROGRAMFILES}/MyApp/bin/myapp.exe
     options: "--default-config"
 ```
@@ -225,7 +249,7 @@ win-run notepad.exe /tmp/test.txt
 **Optimizing Windows Command Execution:**
 - Use `win-run --raw` for binary output to skip encoding conversion
 - Use `win-run --plain` to skip automatic path conversion when not needed
-- Cache frequently used Windows executable paths in win-run.yml aliases
+- Cache frequently used Windows executable paths in `wslutil.yml` `exes` entries
 
 ## Testing
 

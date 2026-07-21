@@ -56,7 +56,7 @@ show_help() {
     cat <<EOF
 Usage: wslutil-setup <exes|windows|linux> [OPTIONS]
 
-  exes      Create winexe/winrun links in the XDG data bin directory (user)
+  exes      Create PATH symlinks for exes entries (direct/shim) in the XDG data bin directory (user)
   windows   Merge .wslconfig and .wslgconfig into the Windows user profile (user)
   linux     Merge /etc/wsl.conf (elevated; execs wslutil-setup-linux)
 

@@ -149,8 +149,13 @@ memory=4GB"
 @test "wslutil-setup expands variables in wslutil.yml paths" {
     skip_if_no_yq
     
-    # Set up test environment variables
+    # Set up test environment variables (all WIN_* set so win-env bootstrap does not overwrite)
+    export WIN_WINDIR="$TEST_TEMP_DIR/Windows"
     export WIN_PROGRAMFILES="$TEST_TEMP_DIR/Program Files"
+    export WIN_PROGRAMFILES_X86="$TEST_TEMP_DIR/Program Files (x86)"
+    export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"
+    export WIN_LOCALAPPDATA="$WIN_USERPROFILE/AppData/Local"
+    export WIN_APPDATA="$WIN_USERPROFILE/AppData/Roaming"
     mkdir -p "$WIN_PROGRAMFILES/TestApp/bin"
     echo "mock executable" > "$WIN_PROGRAMFILES/TestApp/bin/testapp"
     

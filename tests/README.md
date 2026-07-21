@@ -93,7 +93,7 @@ bats test_option_parsing.bats
 - **`test_wslutil_setup.bats`** - Tests for wslutil-setup command
   - Command-line option parsing (--help, --dry-run)
   - YAML configuration processing (wslutil.yml)
-  - Symlink creation for winrun and winexe entries
+  - Symlink creation for direct and shim exes entries
   - Variable expansion in configuration paths
   - Two-phase processing (system and user configs)
   - INI file merging with crudini

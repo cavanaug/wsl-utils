@@ -1,15 +1,30 @@
 # Configuration Settings
 
-During `wslutil setup exes`, `wslutil setup windows`, or `sudo wslutil-setup-linux`, the following configuration files are used to merge settings into OS and user configuration files.
+Factory config lives under `config/` in a checkout, or `${PREFIX}/share/wslutil/config/` after `make install`. User overrides go in `${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/`.
 
-## Winutil
+## `wslutil setup exes` and `win-run`
 
-wslutil.conf - configuration file for wslutil itseelf, primarily for setting symlinks in bin
+**File:** `wslutil.yml` (factory + user merge-by-name)
 
-## System & User configuration files
+Defines Windows executables under an `exes` map. Used by both `wslutil setup exes` (PATH symlinks) and `win-run` (path/options resolution). See [DETAILS.md](../DETAILS.md#windows-executable-configuration-wslutilyml) for the full schema.
 
-The utility crudini is used to merge these files and must be installed, 'wslutil doctor' checks for it
+## `wslutil setup windows`
 
-wsl.conf - This file is merged into /etc/wsl.conf
-wslconfig - This file is merged into ${WIN_USERPROFILE}/.wslconfig
-wslgconfig - This file is merged into ${WIN_USERPROFILE}/.wslgconfig
+**Files:** `wslconfig`, `wslgconfig`
+
+Merged into the Windows user profile with `crudini`:
+
+- `wslconfig` → `${WIN_USERPROFILE}/.wslconfig`
+- `wslgconfig` → `${WIN_USERPROFILE}/.wslgconfig`
+
+Factory files are processed first; user files in `~/.config/wslutil/` override by section/key.
+
+## `wslutil setup linux`
+
+**File:** `wsl.conf`
+
+Merged into `/etc/wsl.conf` via `sudo wslutil-setup-linux` (requires `crudini` and root). Factory `wsl.conf` is processed first; user `~/.config/wslutil/wsl.conf` is merged on top.
+
+## Dependencies
+
+`wslutil doctor` checks for `crudini`, which is required for `setup windows` and `setup linux`.
