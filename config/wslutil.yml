@@ -26,6 +26,9 @@ exes:
   code-insiders:
     mode: direct
     path: ${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders
+  cursor:
+    mode: direct
+    path: ${WIN_USERPROFILE}/AppData/Local/Programs/cursor/resources/app/bin/cursor
   brave.exe:
     mode: direct
     path: ${WIN_USERPROFILE}/AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe
