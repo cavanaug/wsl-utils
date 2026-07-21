@@ -14,7 +14,8 @@ teardown() {
 }
 
 @test "exes merge: user entry replaces factory entry for same name" {
-    local factory="$TEST_TEMP_DIR/factory.yml"
+    local factory="$TEST_TEMP_DIR/config/wslutil.yml"
+    mkdir -p "$TEST_TEMP_DIR/config"
     local user="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     cat > "$factory" << 'EOF'
 exes:
