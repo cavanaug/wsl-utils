@@ -43,9 +43,16 @@ wslutil_clipboard_store() {
 }
 
 wslutil_clipboard_file_url() {
-    local abspath="${1:?}" encoded="" c hex i
+    local abspath="${1:?}"
     [[ "$abspath" == /* ]] || { echo "wslutil_clipboard_file_url: path must be absolute" >&2; return 1; }
-    # Percent-encode path bytes; keep /
+    # Percent-encode UTF-8 octets (not Unicode codepoints); keep /
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import sys, urllib.parse; sys.stdout.write("file://" + urllib.parse.quote(sys.argv[1], safe="/"))' "$abspath"
+        return
+    fi
+    # Fallback: LC_ALL=C byte-wise walk of UTF-8 path bytes
+    local encoded="" c hex i
+    local LC_ALL=C
     for ((i = 0; i < ${#abspath}; i++)); do
         c="${abspath:i:1}"
         case "$c" in

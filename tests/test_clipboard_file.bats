@@ -49,6 +49,18 @@ teardown() {
     [[ "$url" == *"/clip-20260721-160812-text-aaaaaaaaaaaa.txt" ]]
 }
 
+@test "file url percent-encodes UTF-8 octets for non-ASCII path" {
+    # café → c3 a9 in UTF-8; must not emit bare %E9 (Unicode codepoint)
+    dir="$XDG_CACHE_HOME/wslutil/clipboard"
+    mkdir -p "$dir"
+    f="$dir/clip-café-text-bbbbbbbbbbbb.txt"
+    printf 'x' >"$f"
+    url="$(wslutil_clipboard_file_url "$f")"
+    [[ "$url" == file://* ]]
+    [[ "$url" == *"caf%C3%A9"* ]]
+    [[ "$url" != *"caf%E9"* ]]
+}
+
 @test "format maps and rejects unknown" {
     [ "$(wslutil_clipboard_format_ext png)" = "png" ]
     [ "$(wslutil_clipboard_format_ext jpeg)" = "jpg" ]

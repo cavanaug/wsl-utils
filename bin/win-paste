@@ -369,10 +369,11 @@ fetch_clipboard_payload() {
 }
 
 materialize_clipboard_and_emit() {
-    local mode="$1" format="${2:-}" path
+    local mode="$1" format="${2:-}" path store_status=0
     fetch_clipboard_payload "$format" || return 1
-    path="$(wslutil_clipboard_store "$PAYLOAD_FILE" "$KIND" "$EXT")" || return 1
+    path="$(wslutil_clipboard_store "$PAYLOAD_FILE" "$KIND" "$EXT")" || store_status=$?
     rm -f "$PAYLOAD_FILE"
+    [[ $store_status -eq 0 ]] || return "$store_status"
     wslutil_clipboard_emit "$mode" "$path"
     printf '\n'
 }
