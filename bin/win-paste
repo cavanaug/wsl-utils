@@ -140,10 +140,94 @@ if [[ -n "$FORMAT" ]]; then
     }
 fi
 
-# Stub until Task 3 implements fetch + store + emit.
-materialize_clipboard_and_emit() {
-    echo "win-paste: file materialize not implemented" >&2
+powershell_bin() {
+    printf '%s' "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
+}
+
+# Returns 0 and writes bytes to $1 when clipboard has plain text
+ps_try_text() {
+    local out="$1"
+    "$(powershell_bin)" -NoProfile -Command \
+        '[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; $t=Get-Clipboard -Raw -ErrorAction SilentlyContinue; if($null -eq $t -or $t -eq ""){ exit 1 }; [Console]::Out.Write($t)' \
+        >"$out" 2>/dev/null
+}
+
+# Returns 0 and writes HTML to $1 when available
+ps_try_html() {
+    local out="$1"
+    "$(powershell_bin)" -NoProfile -Command \
+        '$h=Get-Clipboard -TextFormatType Html -ErrorAction SilentlyContinue; if($null -eq $h -or $h -eq ""){ exit 1 }; [Console]::OutputEncoding=[System.Text.Encoding]::UTF8; [Console]::Out.Write($h)' \
+        >"$out" 2>/dev/null
+}
+
+# Sets globals PAYLOAD_FILE KIND EXT via temp file. format is optional.
+fetch_clipboard_payload() {
+    local format="${1:-}" tmp
+    tmp="$(mktemp)"
+    if [[ -n "$format" ]]; then
+        case "$format" in
+            txt)
+                ps_try_text "$tmp" || {
+                    rm -f "$tmp"
+                    echo "win-paste: no text on clipboard" >&2
+                    return 1
+                }
+                # strip CR for stored text (materialize owns encoding; not --raw)
+                sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
+                PAYLOAD_FILE="$tmp"
+                KIND=text
+                EXT=txt
+                return 0
+                ;;
+            html)
+                ps_try_html "$tmp" || {
+                    rm -f "$tmp"
+                    echo "win-paste: no HTML on clipboard" >&2
+                    return 1
+                }
+                PAYLOAD_FILE="$tmp"
+                KIND=html
+                EXT=html
+                return 0
+                ;;
+            png | jpeg | jpg | gif | webp)
+                echo "win-paste: image formats require image clipboard support" >&2
+                rm -f "$tmp"
+                return 1
+                ;;
+            *)
+                rm -f "$tmp"
+                return 1
+                ;;
+        esac
+    fi
+
+    # richest: prefer html over text for now; Task 4 inserts image first
+    if ps_try_html "$tmp"; then
+        PAYLOAD_FILE="$tmp"
+        KIND=html
+        EXT=html
+        return 0
+    fi
+    if ps_try_text "$tmp"; then
+        sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
+        PAYLOAD_FILE="$tmp"
+        KIND=text
+        EXT=txt
+        return 0
+    fi
+    rm -f "$tmp"
+    echo "win-paste: clipboard empty or unsupported" >&2
     return 1
+}
+
+materialize_clipboard_and_emit() {
+    local mode="$1" format="${2:-}" path
+    fetch_clipboard_payload "$format" || return 1
+    path="$(wslutil_clipboard_store "$PAYLOAD_FILE" "$KIND" "$EXT")" || return 1
+    rm -f "$PAYLOAD_FILE"
+    wslutil_clipboard_emit "$mode" "$path"
+    printf '\n'
 }
 
 if [[ -n "$FILE_MODE" ]]; then
@@ -163,7 +247,7 @@ paste_clipboard() {
             mkdir -p ${HOME}/.local/state/wslutil
             echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
         fi
-        "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw).ToString())'
+        "$(powershell_bin)" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw).ToString())'
     fi
 }
 

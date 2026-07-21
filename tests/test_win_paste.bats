@@ -12,9 +12,26 @@ setup() {
     mkdir -p "$TEST_TEMP_DIR/Windows/System32/WindowsPowerShell/v1.0"
     export WIN_WINDIR="$TEST_TEMP_DIR/Windows"
 
-    # Mock powershell.exe: ignore args, emit fixture from WIN_PASTE_FIXTURE.
+    # Mock powershell.exe: dispatcher for text/HTML/image materialize probes.
     cat > "$WIN_WINDIR/System32/WindowsPowerShell/v1.0/powershell.exe" << 'EOF'
 #!/bin/bash
+# Test double: inspect joined args for materialize probes.
+args="$*"
+if [[ "$args" == *Get-Clipboard*Html* ]] || [[ "$args" == *TextFormat.Html* ]]; then
+    if [[ -n "${WIN_PASTE_HTML_FIXTURE:-}" && -f "${WIN_PASTE_HTML_FIXTURE}" ]]; then
+        cat "${WIN_PASTE_HTML_FIXTURE}"
+        exit 0
+    fi
+    exit 1
+fi
+if [[ "$args" == *Format*Image* ]] || [[ "$args" == *Get-Clipboard*Image* ]]; then
+    if [[ -n "${WIN_PASTE_IMAGE_FIXTURE:-}" && -f "${WIN_PASTE_IMAGE_FIXTURE}" ]]; then
+        cat "${WIN_PASTE_IMAGE_FIXTURE}"
+        exit 0
+    fi
+    exit 1
+fi
+# Default: text
 cat "${WIN_PASTE_FIXTURE:?}"
 EOF
     chmod +x "$WIN_WINDIR/System32/WindowsPowerShell/v1.0/powershell.exe"
@@ -70,4 +87,49 @@ teardown() {
     [[ "$output" =~ "--file-path" ]]
     [[ "$output" =~ "--file-atpath" ]]
     [[ "$output" =~ "--format" ]]
+}
+
+@test "win-paste --file-path materializes text and prints absolute path" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'agent-text' >"$WIN_PASTE_FIXTURE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ ^$XDG_CACHE_HOME/wslutil/clipboard/clip-[0-9]{8}-[0-9]{6}-text-[0-9a-f]{12}\.txt$ ]]
+    [ "$(cat "$output")" = "agent-text" ]
+}
+
+@test "win-paste --file-url and --file-atpath emit shapes" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'shape' >"$WIN_PASTE_FIXTURE"
+
+    run win-paste --file-url
+    [ "$status" -eq 0 ]
+    [[ "$output" == file:///* ]]
+
+    run win-paste --file-atpath
+    [ "$status" -eq 0 ]
+    [[ "$output" == @/* ]]
+}
+
+@test "win-paste --file-path dedups identical text" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'dedup-me' >"$WIN_PASTE_FIXTURE"
+
+    p1="$(win-paste --file-path)"
+    sleep 1
+    p2="$(win-paste --file-path)"
+    [ "$p1" = "$p2" ]
+}
+
+@test "win-paste --format html on plain text fails" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    printf 'nope' >"$WIN_PASTE_FIXTURE"
+
+    run win-paste --file-path --format html
+    [ "$status" -ne 0 ]
 }
