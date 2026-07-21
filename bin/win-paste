@@ -14,6 +14,7 @@
 #  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
 #  - By default this tool strips trailing ^M (CR) characters from text for Unix line endings.
 #  - Use --raw to skip line-ending manipulation (binary / exact clipboard bytes).
+#  - Use --file-url / --file-path / --file-atpath to materialize clipboard content to a cache file.
 #  - wslutil checkhealth will tell you if you need this script or not
 #
 # Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
@@ -35,9 +36,17 @@ DESCRIPTION:
     If WSLg is available and enabled, uses wl-paste with proper fallback.
     Otherwise, uses PowerShell's Get-Clipboard command.
 
+    File materialize modes write clipboard content under
+    ${XDG_CACHE_HOME:-$HOME/.cache}/wslutil/clipboard and emit a path/URL;
+    with no --format, the richest available clipboard format is chosen.
+
 OPTIONS:
-    -h, --help    Show this help message and exit
-    --raw         Do not alter line endings (no ^M stripping)
+    -h, --help      Show this help message and exit
+    --raw           Do not alter line endings (no ^M stripping)
+    --file-url      Materialize clipboard to cache; print file:// URL
+    --file-path     Materialize clipboard to cache; print absolute path
+    --file-atpath   Materialize clipboard to cache; print @<absolute-path>
+    --format FMT    Convert/write as png|jpeg|jpg|gif|webp|txt|html
 
     When WSLg is available, all wl-paste options are supported:
     -n, --no-newline    Don't add newline at end of output (DEFAULT)
@@ -60,16 +69,87 @@ EOF
     exit 0
 fi
 
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-clipboard-file.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-clipboard-file.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-clipboard-file.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-clipboard-file.sh"
+else
+    echo "win-paste: clipboard helper not found" >&2
+    exit 1
+fi
+
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
 
 RAW=0
+FILE_MODE="" # url|path|atpath|empty
+FORMAT=""    # optional short name
 ARGS=()
-for arg in "$@"; do
-    case "$arg" in
-        --raw) RAW=1 ;;
-        *) ARGS+=("$arg") ;;
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --raw)
+            RAW=1
+            shift
+            ;;
+        --file-url | --file-path | --file-atpath)
+            if [[ -n "$FILE_MODE" ]]; then
+                echo "win-paste: use only one of --file-url, --file-path, --file-atpath" >&2
+                exit 1
+            fi
+            case "$1" in
+                --file-url) FILE_MODE=url ;;
+                --file-path) FILE_MODE=path ;;
+                --file-atpath) FILE_MODE=atpath ;;
+            esac
+            shift
+            ;;
+        --format)
+            [[ $# -ge 2 ]] || {
+                echo "win-paste: --format requires a value" >&2
+                exit 1
+            }
+            FORMAT="$2"
+            shift 2
+            ;;
+        --format=*)
+            FORMAT="${1#--format=}"
+            shift
+            ;;
+        -h | --help)
+            shift
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
     esac
 done
+
+if [[ -n "$FILE_MODE" && $RAW -eq 1 ]]; then
+    echo "win-paste: --raw cannot be combined with --file-*" >&2
+    exit 1
+fi
+
+if [[ -n "$FORMAT" ]]; then
+    wslutil_clipboard_format_ext "$FORMAT" >/dev/null || {
+        echo "win-paste: unsupported --format: $FORMAT" >&2
+        exit 1
+    }
+fi
+
+# Stub until Task 3 implements fetch + store + emit.
+materialize_clipboard_and_emit() {
+    echo "win-paste: file materialize not implemented" >&2
+    return 1
+}
+
+if [[ -n "$FILE_MODE" ]]; then
+    materialize_clipboard_and_emit "$FILE_MODE" "$FORMAT"
+    exit $?
+fi
 
 paste_clipboard() {
     if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-paste ]]; then

@@ -51,3 +51,23 @@ teardown() {
     expected="$(printf 'line1\r\nline2\r\n' | od -An -tx1)"
     [ "$result" = "$expected" ]
 }
+
+@test "win-paste rejects multiple --file-* emit flags" {
+    run win-paste --file-url --file-path
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ file || "$stderr" =~ file || "$output" =~ exclusive || "$stderr" =~ exclusive ]]
+}
+
+@test "win-paste rejects --file-* with --raw" {
+    run win-paste --file-path --raw
+    [ "$status" -ne 0 ]
+}
+
+@test "win-paste --help documents file materialize flags" {
+    run win-paste --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "--file-url" ]]
+    [[ "$output" =~ "--file-path" ]]
+    [[ "$output" =~ "--file-atpath" ]]
+    [[ "$output" =~ "--format" ]]
+}
