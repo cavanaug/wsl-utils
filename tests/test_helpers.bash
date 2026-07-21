@@ -44,16 +44,19 @@ create_test_config() {
 # Create a test alias config
 create_test_alias_config() {
     local config_file="$1"
-    
+
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   testcmd:
+    mode: none
     path: ${WIN_WINDIR}/System32/ipconfig.exe
     options: null
   testcmd-with-opts:
+    mode: none
     path: ${WIN_WINDIR}/System32/ipconfig.exe
     options: "/all"
   testping:
+    mode: none
     path: ${WIN_WINDIR}/System32/ping.exe
     options: "-n 2"
 EOF
