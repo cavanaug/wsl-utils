@@ -52,6 +52,33 @@ EOF
     [ "$output" = "shim" ]
 }
 
+@test "exes merge: user partial entry replaces whole factory entry" {
+    local factory="$TEST_TEMP_DIR/config/wslutil.yml"
+    mkdir -p "$TEST_TEMP_DIR/config"
+    local user="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    cat > "$factory" << 'EOF'
+exes:
+  shared.exe:
+    mode: direct
+    options: "-f"
+EOF
+    cat > "$user" << 'EOF'
+exes:
+  shared.exe:
+    mode: none
+EOF
+
+    run wslutil_exes_load_merged "" "$TEST_TEMP_DIR" "$XDG_CONFIG_HOME"
+    [ "$status" -eq 0 ]
+    echo "$output" > "$TEST_TEMP_DIR/merged.yml"
+
+    run wslutil_exes_mode "$TEST_TEMP_DIR/merged.yml" "shared.exe"
+    [ "$output" = "none" ]
+
+    run wslutil_exes_options "$TEST_TEMP_DIR/merged.yml" "shared.exe"
+    [ "$output" = "" ]
+}
+
 @test "exes -c uses only custom file" {
     local factory="$TEST_TEMP_DIR/config/wslutil.yml"
     mkdir -p "$TEST_TEMP_DIR/config"

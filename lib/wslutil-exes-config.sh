@@ -48,8 +48,8 @@ wslutil_exes_load_merged() {
         return 0
     fi
 
-    # Merge .exes maps left-to-right; later wins per key (whole object)
-    yq eval-all '. as $item ireduce ({}; . * $item)' "${files[@]}"
+    # Merge .exes maps left-to-right; later file wins per key (whole entry object, not deep merge)
+    yq eval-all '. as $item ireduce ({}; .exes = ((.exes // {}) + ($item.exes // {})))' "${files[@]}"
 }
 
 wslutil_exes_mode() {
