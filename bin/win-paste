@@ -60,6 +60,8 @@ EXAMPLES:
     win-paste | grep "error"        # Search clipboard content
     win-paste --raw > binary.bin    # Exact clipboard bytes
     echo "backup: $(win-paste)"     # Include clipboard in output
+    win-paste --file-atpath         # Materialize; print @/path
+    win-paste --file-url --format png  # Materialize as PNG; print file:// URL
 
 NOTES:
     - Logs usage to ~/.local/state/wslutil/win-clipboard.log

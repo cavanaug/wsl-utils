@@ -96,6 +96,10 @@ win-browser https://github.com    # Open in browser
 ls -la | win-copy                 # Copy to clipboard with proper UTF-8 encoding
 win-paste | grep "important"      # Paste with Unix line endings, pipeline-ready
 echo "Linux text" | win-copy      # Works seamlessly with Linux text
+
+# Materialize clipboard for agents (image or large text)
+win-paste --file-atpath            # → @/home/.../clip-...-image-....png
+win-paste --file-url --format png  # → file:///.../clip-....png
 ```
 
 **Why these tools are Linux-friendly:**
