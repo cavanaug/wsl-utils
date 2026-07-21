@@ -34,8 +34,23 @@ else
     echo "wslutil-setup: setup-common helper not found" >&2
     exit 1
 fi
+if [[ -f "$_wsu_bin/../lib/wslutil-exes-config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-exes-config.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-exes-config.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-exes-config.sh"
+else
+    echo "wslutil-setup: exes config helper not found" >&2
+    exit 1
+fi
 DATADIR="$(wslutil_resolve_datadir "${BASH_SOURCE[0]}")"
 SHIMDIR="$(wslutil_shimdir)"
+
+# Skip CLI parsing/execution when sourced (e.g. bats tests exercising just the lib sourcing)
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 show_help() {
     cat <<EOF
@@ -120,16 +135,9 @@ fi
 log_info "Using data directory: $DATADIR"
 log_info "Using shim directory: $SHIMDIR"
 
-# Function to process wslutil.yml for symlink creation
-process_winutil_config() {
-    local config_file="$1"
-
-    if [[ ! -f "$config_file" ]]; then
-        log_warning "wslutil.yml not found: $config_file"
-        return 1
-    fi
-
-    log_info "Processing wslutil configuration for symlinks: $config_file"
+# Function to process the merged exes: map for symlink creation
+process_exes_config() {
+    local merged_file="$1"
 
     # Check if yq is available for YAML processing
     if ! command -v yq &>/dev/null; then
@@ -142,32 +150,45 @@ process_winutil_config() {
         mkdir -p "$SHIMDIR"
     fi
 
-    # Process winrun entries (symlink to win-run script)
-    log_info "Processing winrun entries..."
-    local winrun_entries
-    winrun_entries=$(yq eval '.winrun[]' "$config_file" 2>/dev/null | sed 's/ *#.*$//' | grep -v '^$' || true)
+    log_info "Processing exes entries..."
+    local name mode path
+    while IFS= read -r name; do
+        [[ -z "$name" ]] && continue
+        mode="$(wslutil_exes_mode "$merged_file" "$name")"
+        path="$(wslutil_exes_path "$merged_file" "$name")"
+        case "$mode" in
+        shim)
+            create_symlink_to_winrun "$name" || true
+            ;;
+        direct)
+            if [[ -n "$path" ]]; then
+                create_direct_symlink "$(wslutil_exes_expand "$path")" "$name" || true
+            else
+                create_direct_symlink "$name" "$name" || true
+            fi
+            ;;
+        none)
+            remove_shimdir_link "$name" || true
+            ;;
+        *)
+            log_warning "exes.$name: invalid or missing mode '$mode' (skipping)"
+            ;;
+        esac
+    done < <(wslutil_exes_names "$merged_file")
+}
 
-    if [[ -n "$winrun_entries" ]]; then
-        while IFS= read -r entry; do
-            [[ -z "$entry" ]] && continue
-            create_symlink_to_winrun "$entry" || true
-        done <<<"$winrun_entries"
-    else
-        log_info "No winrun entries found in $config_file"
-    fi
-
-    # Process winexe entries (direct symlinks to Windows executables)
-    log_info "Processing winexe entries..."
-    local winexe_entries
-    winexe_entries=$(yq eval '.winexe[]' "$config_file" 2>/dev/null | sed 's/ *#.*$//' | grep -v '^$' || true)
-
-    if [[ -n "$winexe_entries" ]]; then
-        while IFS= read -r entry; do
-            [[ -z "$entry" ]] && continue
-            create_direct_symlink "$entry" || true
-        done <<<"$winexe_entries"
-    else
-        log_info "No winexe entries found in $config_file"
+# Function to remove a stale shimdir symlink for mode: none entries
+remove_shimdir_link() {
+    local name="$1"
+    local target_link="$SHIMDIR/$name"
+    if [[ -e "$target_link" || -L "$target_link" ]]; then
+        log_info "Removing symlink (mode: none): $name"
+        if [[ $DRY_RUN -eq 1 ]]; then
+            log_info "[DRY-RUN] Would remove: $target_link"
+            return 0
+        fi
+        rm -f "$target_link"
+        log_success "Removed: $target_link"
     fi
 }
 
@@ -211,8 +232,10 @@ create_symlink_to_winrun() {
 }
 
 # Function to create direct symlink to Windows executable
+# Args: executable (name or full path), [explicit_symlink_name] (map key, when path basename may differ)
 create_direct_symlink() {
     local executable="$1"
+    local explicit_name="${2:-}"
     local win_executable=""
     local symlink_name=""
 
@@ -223,8 +246,12 @@ create_direct_symlink() {
     if [[ "$executable" == /* ]]; then
         # Full path provided - use it directly
         win_executable="$executable"
-        # Extract basename for symlink name
+        # Extract basename for symlink name, unless an explicit name (map key) was given
         symlink_name=$(basename "$executable")
+        if [[ -n "$explicit_name" ]]; then
+            [[ "$symlink_name" != "$explicit_name" ]] && log_warning "exes.$explicit_name: path basename '$symlink_name' differs from key; using key as symlink name"
+            symlink_name="$explicit_name"
+        fi
 
         # For full paths, check if the file exists before proceeding
         if [[ ! -f "$win_executable" ]]; then
@@ -233,7 +260,7 @@ create_direct_symlink() {
         fi
     else
         # Just executable name - search in cache
-        symlink_name="$executable"
+        symlink_name="${explicit_name:-$executable}"
 
         # Use the same cache approach as programs.sh
         local XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -368,22 +395,6 @@ update_programs_cache() {
     log_info "Windows executable cache updated using PATH: $programs_cache ($(wc -l <"$programs_cache") executables)"
 }
 
-# Function to select the wslutil.yml file used for shim creation
-select_shim_config_file() {
-    if [[ -n "$CUSTOM_CONFIG_FILE" ]]; then
-        echo "$CUSTOM_CONFIG_FILE"
-        return 0
-    fi
-
-    local user_config_file="${XDG_CONFIG_HOME:-$HOME/.config}/wslutil/wslutil.yml"
-    if [[ -f "$user_config_file" ]]; then
-        echo "$user_config_file"
-        return 0
-    fi
-
-    echo "$DATADIR/config/wslutil.yml"
-}
-
 # Function to merge Windows profile config files (.wslconfig/.wslgconfig) from a given directory
 merge_windows_from_dir() {
     local config_dir="$1"
@@ -417,12 +428,16 @@ merge_windows_from_dir() {
 
 process_shims() {
     bootstrap_win_env_if_needed
-    local shim_config_file
-    shim_config_file="$(select_shim_config_file)"
+    wslutil_exes_warn_legacy "${XDG_CONFIG_HOME:-$HOME/.config}"
+
+    local merged
+    merged="$(mktemp)"
+    wslutil_exes_load_merged "${CUSTOM_CONFIG_FILE:-}" "$DATADIR" "${XDG_CONFIG_HOME:-$HOME/.config}" >"$merged"
 
     log_info "=== Phase: Shim Configuration ==="
     log_info "Using shim directory: $SHIMDIR"
-    process_winutil_config "$shim_config_file"
+    process_exes_config "$merged"
+    rm -f "$merged"
 }
 
 process_windows() {

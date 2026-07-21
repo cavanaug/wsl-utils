@@ -38,13 +38,18 @@ teardown() {
     
     local test_config="$TEST_DIR/test-config.yml"
     cat > "$test_config" <<'EOF'
-winexe:
-  - notepad.exe
-  - "${WIN_PROGRAMFILES}/test.exe"
-  - "${MALICIOUS_VAR}/bad.exe"
+exes:
+  notepad.exe:
+    mode: shim
+  test.exe:
+    mode: direct
+    path: "${WIN_PROGRAMFILES}/test.exe"
+  bad.exe:
+    mode: direct
+    path: "${MALICIOUS_VAR}/bad.exe"
 EOF
 
-    run bash -c "cd '$CHECKOUT_ROOT/bin' && source wslutil-setup && echo 'test' | envsubst '\${WIN_PROGRAMFILES}'"
+    run bash -c "cd '$CHECKOUT_ROOT/bin' && source ./wslutil-setup && echo 'test' | envsubst '\${WIN_PROGRAMFILES}'"
     
     [ "$status" -eq 0 ]
 }

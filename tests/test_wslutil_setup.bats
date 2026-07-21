@@ -109,17 +109,22 @@ memory=4GB"
 }
 
 # Test YAML processing with yq
-@test "wslutil-setup processes wslutil.yml when yq is available" {
+@test "wslutil-setup exes processes exes: map entries when yq is available" {
     skip_if_no_yq
-    
-    # Create a test wslutil.yml
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
-  - cmd.exe
-  - notepad.exe
-winrun:
-  - curl.exe
-  - reg.exe'
-    
+
+    # Create a test wslutil.yml using the unified exes: map (direct + shim modes)
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  cmd.exe:
+    mode: direct
+  notepad.exe:
+    mode: direct
+  curl.exe:
+    mode: shim
+  reg.exe:
+    mode: shim
+'
+
     # Create mock Windows executables cache
     echo "/mnt/c/Windows/System32/cmd.exe" > "$XDG_CACHE_HOME/wslutil/programs"
     echo "/mnt/c/Windows/System32/notepad.exe" >> "$XDG_CACHE_HOME/wslutil/programs"
@@ -133,11 +138,11 @@ winrun:
     touch "/mnt/c/Windows/System32/curl.exe" 2>/dev/null || true
     touch "/mnt/c/Windows/System32/reg.exe" 2>/dev/null || true
     
-    run "$WSLUTIL_SETUP" exes --dry-run
+    run "$WSLUTIL_SETUP" exes -c "$config_file" --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Processing wslutil configuration" ]]
-    [[ "$output" =~ "Processing winrun entries" ]]
-    [[ "$output" =~ "Processing winexe entries" ]]
+    [[ "$output" =~ "Processing exes entries" ]]
+    [[ "$output" =~ "Creating direct symlink: cmd.exe" ]]
+    [[ "$output" =~ "Creating winrun symlink: curl.exe" ]]
 }
 
 # Test variable expansion in wslutil.yml
@@ -150,12 +155,16 @@ winrun:
     echo "mock executable" > "$WIN_PROGRAMFILES/TestApp/bin/testapp"
     
     # Create wslutil.yml with variable expansion
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
-  - "${WIN_PROGRAMFILES}/TestApp/bin/testapp"'
-    
-    run "$WSLUTIL_SETUP" exes --dry-run
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  testapp:
+    mode: direct
+    path: "${WIN_PROGRAMFILES}/TestApp/bin/testapp"
+'
+
+    run "$WSLUTIL_SETUP" exes -c "$config_file" --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Processing wslutil configuration" ]]
+    [[ "$output" =~ "Processing exes entries" ]]
     [[ "$output" =~ "Creating direct symlink: testapp" ]]
 }
 
@@ -164,10 +173,14 @@ winrun:
     skip_if_no_yq
     
     # Create wslutil.yml with non-existent path
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
-  - "/nonexistent/path/to/app.exe"'
-    
-    run "$WSLUTIL_SETUP" exes --dry-run
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  app.exe:
+    mode: direct
+    path: "/nonexistent/path/to/app.exe"
+'
+
+    run "$WSLUTIL_SETUP" exes -c "$config_file" --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Skipping missing executable: /nonexistent/path/to/app.exe" ]]
 }
@@ -177,31 +190,36 @@ winrun:
     skip_if_no_yq
     
     # Create a test wslutil.yml
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
-  - testexe.exe'
-    
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  testexe.exe:
+    mode: shim
+'
+
     # Create existing symlink
     mkdir -p "$TEST_SHIMDIR"
     win_run_target="$(cd "$BATS_TEST_DIRNAME/../bin" && pwd)/win-run"
     ln -s "$win_run_target" "$TEST_SHIMDIR/testexe.exe"
     
-    run "$WSLUTIL_SETUP" exes --dry-run
+    run "$WSLUTIL_SETUP" exes -c "$config_file" --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Symlink already exists: testexe.exe -> $win_run_target (skipping)" ]]
 }
 
-# Test shim config precedence
-@test "wslutil-setup prefers user shim config over factory config" {
+# Test factory+user merge precedence (user entry overrides factory entry for the same key)
+@test "wslutil-setup exes merges user wslutil.yml with factory (user wins per key)" {
     skip_if_no_yq
-    
-    # Create user config
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
-  - user-tool.exe'
-    
+
+    # Factory config ships cmd.exe with mode: direct; user overrides it to mode: shim
+    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'exes:
+  cmd.exe:
+    mode: shim
+'
+
     run "$WSLUTIL_SETUP" exes --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "$XDG_CONFIG_HOME/wslutil/wslutil.yml" ]]
-    [[ "$output" =~ "Creating winrun symlink: user-tool.exe" ]]
+    [[ "$output" =~ "Creating winrun symlink: cmd.exe" ]]
+    [[ "$output" != *"Creating direct symlink: cmd.exe"* ]]
 }
 
 # Test INI file merging with crudini
@@ -250,11 +268,14 @@ enabled = true"
     export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"
     mkdir -p "$WIN_USERPROFILE/AppData/Local/Programs"
     
-    # Create wslutil.yml that will trigger cache building
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winexe:
-  - cmd.exe'
-    
-    run "$WSLUTIL_SETUP" exes --dry-run
+    # Create wslutil.yml that will trigger cache building (name-lookup mode: direct, no path)
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  cmd.exe:
+    mode: direct
+'
+
+    run "$WSLUTIL_SETUP" exes -c "$config_file" --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Building/updating Windows executable cache" ]]
     [[ "$output" =~ "Building executable cache using Windows PATH" ]]
@@ -272,12 +293,15 @@ enabled = true"
     skip_if_no_yq
 
     # Create wslutil.yml
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
-  - test.exe'
-    
+    local config_file="$TEST_TEMP_DIR/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  test.exe:
+    mode: shim
+'
+
     # Run setup (not dry-run to actually create symlinks)
     export WIN_USERPROFILE="$TEST_TEMP_DIR/Users/testuser"  # Required to avoid error
-    run "$WSLUTIL_SETUP" exes
+    run "$WSLUTIL_SETUP" exes -c "$config_file"
     [ "$status" -eq 0 ]
     
     # Verify symlink was created in the XDG shimdir with an absolute target
@@ -285,6 +309,25 @@ enabled = true"
     [ ! -e "$TEST_TEMP_DIR/bin/test.exe" ]
     link_target=$(readlink "$TEST_SHIMDIR/test.exe")
     [ "$link_target" = "$(cd "$BATS_TEST_DIRNAME/../bin" && pwd)/win-run" ]
+}
+
+# Test mode: none removes a stale shimdir link
+@test "wslutil-setup exes removes shimdir link when mode is none" {
+    skip_if_no_yq
+
+    mkdir -p "$TEST_SHIMDIR"
+    ln -s "$CHECKOUT_ROOT/bin/win-run" "$TEST_SHIMDIR/stale.exe"
+
+    local config_file="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    create_test_config "$config_file" 'exes:
+  stale.exe:
+    mode: none
+'
+
+    # Use -c so only this file applies (factory/user merge would not re-add stale.exe here anyway)
+    run "$WSLUTIL_SETUP" exes -c "$config_file"
+    [ "$status" -eq 0 ]
+    [ ! -e "$TEST_SHIMDIR/stale.exe" ]
 }
 
 # Test error handling for missing win-run script
@@ -297,10 +340,13 @@ enabled = true"
     cp "$BATS_TEST_DIRNAME/../bin/wslutil-setup" "$missing_winrun_checkout/bin/wslutil-setup"
     cp "$BATS_TEST_DIRNAME/../lib/wslutil-paths.sh" "$missing_winrun_checkout/lib/wslutil-paths.sh"
     cp "$BATS_TEST_DIRNAME/../lib/wslutil-setup-common.sh" "$missing_winrun_checkout/lib/wslutil-setup-common.sh"
+    cp "$BATS_TEST_DIRNAME/../lib/wslutil-exes-config.sh" "$missing_winrun_checkout/lib/wslutil-exes-config.sh"
     
-    # Create wslutil.yml with winrun entry
-    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'winrun:
-  - test.exe'
+    # Create wslutil.yml with a shim entry
+    create_test_config "$XDG_CONFIG_HOME/wslutil/wslutil.yml" 'exes:
+  test.exe:
+    mode: shim
+'
     
     run "$missing_winrun_checkout/bin/wslutil-setup" exes --dry-run
     [ "$status" -eq 0 ]  # Should continue despite error
