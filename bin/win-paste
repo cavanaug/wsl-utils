@@ -187,9 +187,25 @@ wl_try_mime() {
     "$WL_PASTE" -n -t "$mime" >"$out" 2>/dev/null && [[ -s "$out" ]]
 }
 
-# Try image MIME ladder (png → jpeg → gif → webp). Sets KIND/EXT; writes to $2.
+# Convert BMP bytes file → PNG file. Uses magick/convert/ffmpeg when available.
+wl_bmp_to_png() {
+    local src="${1:?}" dest="${2:?}"
+    if command -v magick >/dev/null 2>&1; then
+        magick "$src" "png:$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
+    fi
+    if command -v convert >/dev/null 2>&1; then
+        # Dest is often an extensionless mktemp path — force PNG codec
+        convert "$src" "png:$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
+    fi
+    if command -v ffmpeg >/dev/null 2>&1; then
+        ffmpeg -y -loglevel error -i "$src" -f image2 -c:v png "$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
+    fi
+    return 1
+}
+
+# Try image MIME ladder (png → jpeg → gif → webp → bmp→png). Sets KIND/EXT; writes to $2.
 wl_try_richest_image() {
-    local types="$1" out="$2" mime
+    local types="$1" out="$2" mime bmp_tmp
     for mime in image/png image/jpeg image/gif image/webp; do
         if printf '%s\n' "$types" | grep -qx "$mime" && wl_try_mime "$mime" "$out"; then
             KIND=image
@@ -202,12 +218,39 @@ wl_try_richest_image() {
             return 0
         fi
     done
+    # Windows / Snipping Tool often offers only image/bmp via WSLg
+    for mime in image/bmp image/x-ms-bmp; do
+        if printf '%s\n' "$types" | grep -qx "$mime"; then
+            bmp_tmp="$(mktemp)"
+            if wl_try_mime "$mime" "$bmp_tmp" && wl_bmp_to_png "$bmp_tmp" "$out"; then
+                rm -f "$bmp_tmp"
+                KIND=image
+                EXT=png
+                return 0
+            fi
+            rm -f "$bmp_tmp"
+            # Convert unavailable or failed: PowerShell GetImage → PNG
+            if ps_try_image_png "$out"; then
+                KIND=image
+                EXT=png
+                return 0
+            fi
+        fi
+    done
+    # Any other image/* we didn't handle: last-resort PS GetImage
+    if printf '%s\n' "$types" | grep -q '^image/'; then
+        if ps_try_image_png "$out"; then
+            KIND=image
+            EXT=png
+            return 0
+        fi
+    fi
     return 1
 }
 
 # WSLg richest ladder: image → text/html → text/plain (aligned with PS)
 wl_fetch_clipboard_payload() {
-    local format="${1:-}" tmp types
+    local format="${1:-}" tmp types bmp_tmp
     tmp="$(mktemp)"
     types="$(wl_list_types)"
 
@@ -238,6 +281,26 @@ wl_fetch_clipboard_payload() {
                 ;;
             png)
                 if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$tmp"; then
+                    PAYLOAD_FILE="$tmp"
+                    KIND=image
+                    EXT=png
+                    return 0
+                fi
+                # BMP-only clipboards (common on Windows) → PNG
+                for mime in image/bmp image/x-ms-bmp; do
+                    if printf '%s\n' "$types" | grep -qx "$mime"; then
+                        bmp_tmp="$(mktemp)"
+                        if wl_try_mime "$mime" "$bmp_tmp" && wl_bmp_to_png "$bmp_tmp" "$tmp"; then
+                            rm -f "$bmp_tmp"
+                            PAYLOAD_FILE="$tmp"
+                            KIND=image
+                            EXT=png
+                            return 0
+                        fi
+                        rm -f "$bmp_tmp"
+                    fi
+                done
+                if ps_try_image_png "$tmp"; then
                     PAYLOAD_FILE="$tmp"
                     KIND=image
                     EXT=png

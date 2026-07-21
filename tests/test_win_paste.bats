@@ -211,3 +211,55 @@ EOF
     [[ "$output" =~ -image-[0-9a-f]{12}\.jpg$ ]]
     [ "$(cat "$output")" = "fake-jpeg-bytes" ]
 }
+
+@test "win-paste WSLg path converts image/bmp to png" {
+    if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1 && ! command -v ffmpeg >/dev/null 2>&1; then
+        skip "ImageMagick or ffmpeg required for BMP→PNG"
+    fi
+
+    export WSL2_GUI_APPS_ENABLED=1
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WL_PASTE="$TEST_TEMP_DIR/fake-wl-paste"
+    export WIN_PASTE_BMP_FIXTURE="$TEST_TEMP_DIR/clip.bmp"
+
+    # Minimal 1x1 24-bit BMP
+    python3 - "$WIN_PASTE_BMP_FIXTURE" <<'PY'
+import struct, sys
+path = sys.argv[1]
+pixel = bytes([0, 0, 255, 0])  # BGR + pad
+bisize, bfOffBits = 40, 54
+bfSize = bfOffBits + len(pixel)
+open(path, "wb").write(
+    struct.pack("<2sIHHI", b"BM", bfSize, 0, 0, bfOffBits)
+    + struct.pack("<IiiHHIIiiII", bisize, 1, 1, 1, 24, 0, len(pixel), 0, 0, 0, 0)
+    + pixel
+)
+PY
+
+    cat >"$WL_PASTE" <<EOF
+#!/bin/bash
+if [[ "\$1" == "-l" ]]; then
+    printf 'image/bmp\\n'
+    exit 0
+fi
+mime=""
+prev=""
+for a in "\$@"; do
+    if [[ "\$prev" == "-t" || "\$prev" == "--type" ]]; then
+        mime="\$a"
+    fi
+    prev="\$a"
+done
+if [[ "\$mime" == "image/bmp" || "\$mime" == "image/x-ms-bmp" ]]; then
+    cat "${WIN_PASTE_BMP_FIXTURE}"
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$WL_PASTE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
+    [ "$(file -b --mime-type "$output")" = "image/png" ]
+}
