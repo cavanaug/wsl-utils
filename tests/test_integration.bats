@@ -15,11 +15,13 @@ teardown() {
     # Create a comprehensive test config
     local config_file="$TEST_TEMP_DIR/integration.yml"
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   test-echo:
+    mode: none
     path: ${WIN_WINDIR}/System32/cmd.exe
     options: "/c echo"
   test-ping:
+    mode: none
     path: ${WIN_WINDIR}/System32/ping.exe
     options: "-n 1"
 EOF
@@ -34,11 +36,13 @@ EOF
 @test "integration: environment variable expansion in full pipeline" {
     local config_file="$TEST_TEMP_DIR/env-integration.yml"
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   env-test:
+    mode: none
     path: ${WIN_WINDIR}/System32/ipconfig.exe
     options: null
   multi-env:
+    mode: none
     path: ${WIN_PROGRAMFILES}/../Windows/System32/whoami.exe
     options: null
 EOF
@@ -59,47 +63,38 @@ EOF
 }
 
 @test "integration: config hierarchy precedence" {
-    # Create global config
-    local global_config="$CHECKOUT_ROOT/config/win-run.yml"
-    local global_backup=""
-    if [[ -f "$global_config" ]]; then
-        global_backup=$(mktemp)
-        cp "$global_config" "$global_backup"
-    fi
-    
-    cat > "$global_config" << 'EOF'
-aliases:
+    # Create a fake datadir (factory config) instead of mutating the checkout
+    local fake_datadir="$TEST_TEMP_DIR/datadir"
+    mkdir -p "$fake_datadir/config"
+    cat > "$fake_datadir/config/wslutil.yml" << 'EOF'
+exes:
   hierarchy-test:
+    mode: none
     path: ${WIN_WINDIR}/System32/global.exe
     options: "global"
 EOF
-    
+
     # Create user config that overrides
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     cat > "$user_config" << 'EOF'
-aliases:
+exes:
   hierarchy-test:
+    mode: none
     path: ${WIN_WINDIR}/System32/user.exe
     options: "user"
 EOF
-    
+
+    export WSLUTIL_DATADIR="$fake_datadir"
     source "$CHECKOUT_ROOT/bin/win-run"
-    
+
     # User config should take precedence
     run resolve_alias "hierarchy-test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "user.exe" ]]
-    
+
     run get_alias_options "hierarchy-test"
     [ "$status" -eq 0 ]
     [ "$output" = "user" ]
-    
-    # Restore global config
-    if [[ -n "$global_backup" ]]; then
-        mv "$global_backup" "$global_config"
-    else
-        rm -f "$global_config"
-    fi
 }
 
 @test "integration: help system is comprehensive" {

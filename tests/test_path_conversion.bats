@@ -101,8 +101,9 @@ teardown() {
     # Create config with directory in options
     local config_file="$TEST_TEMP_DIR/path-options.yml"
     cat > "$config_file" << EOF
-aliases:
+exes:
   pathtest:
+    mode: none
     path: \${WIN_WINDIR}/System32/echo.exe
     options: "$test_dir"
 EOF
@@ -126,8 +127,9 @@ EOF
     # Test that environment variables are expanded correctly
     local config_file="$TEST_TEMP_DIR/env-expansion.yml"
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   envpath:
+    mode: none
     path: ${WIN_WINDIR}/System32/cmd.exe
     options: null
 EOF

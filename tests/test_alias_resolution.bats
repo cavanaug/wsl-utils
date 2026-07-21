@@ -22,7 +22,7 @@ teardown() {
 
 @test "resolve_alias finds alias in user config" {
     # Create user config with test alias
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     create_test_alias_config "$user_config"
     
     # Source the win-run script to get access to functions
@@ -38,8 +38,9 @@ teardown() {
     # Create config with environment variable
     local config_file="$TEST_TEMP_DIR/env-test.yml"
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   envtest:
+    mode: none
     path: ${WIN_WINDIR}/System32/cmd.exe
     options: null
 EOF
@@ -54,7 +55,7 @@ EOF
 }
 
 @test "get_alias_options returns options from config" {
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     create_test_alias_config "$user_config"
     
     source "$CHECKOUT_ROOT/bin/win-run"
@@ -65,7 +66,7 @@ EOF
 }
 
 @test "get_alias_options returns empty for alias without options" {
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     create_test_alias_config "$user_config"
     
     source "$CHECKOUT_ROOT/bin/win-run"
@@ -76,7 +77,7 @@ EOF
 }
 
 @test "get_alias_options returns empty for non-existent alias" {
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     create_test_alias_config "$user_config"
     
     source "$CHECKOUT_ROOT/bin/win-run"
@@ -88,10 +89,11 @@ EOF
 
 @test "custom config file takes precedence" {
     # Create user config
-    local user_config="$XDG_CONFIG_HOME/wslutil/win-run.yml"
+    local user_config="$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     cat > "$user_config" << 'EOF'
-aliases:
+exes:
   testcmd:
+    mode: none
     path: /mnt/c/Windows/System32/whoami.exe
     options: null
 EOF
@@ -99,8 +101,9 @@ EOF
     # Create custom config with different alias
     local custom_config="$TEST_TEMP_DIR/custom.yml"
     cat > "$custom_config" << 'EOF'
-aliases:
+exes:
   testcmd:
+    mode: none
     path: ${WIN_WINDIR}/System32/ipconfig.exe
     options: null
 EOF
@@ -118,8 +121,9 @@ EOF
 @test "alias resolution works with complex paths" {
     local config_file="$TEST_TEMP_DIR/complex.yml"
     cat > "$config_file" << 'EOF'
-aliases:
+exes:
   complex-path:
+    mode: none
     path: ${WIN_PROGRAMFILES}/Test App/with spaces/app.exe
     options: null
 EOF
