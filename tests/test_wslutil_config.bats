@@ -17,25 +17,25 @@ teardown() {
     run "$WSLUTIL" config init
     [ "$status" -eq 0 ]
     [ -f "$XDG_CONFIG_HOME/wslutil/wslutil.yml" ]
-    [ -f "$XDG_CONFIG_HOME/wslutil/win-run.yml" ]
+    grep -q 'exes:' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
 }
 
 @test "config init does not overwrite unless --force" {
     export XDG_CONFIG_HOME="$TEST_TEMP_DIR/.config"
     mkdir -p "$XDG_CONFIG_HOME/wslutil"
-    echo 'winexe: []' > "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    echo 'exes: {}' > "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     run "$WSLUTIL" config init
     [ "$status" -eq 0 ]
-    grep -q 'winexe: \[\]' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    grep -q 'exes: {}' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
 }
 
 @test "config init --force overwrites existing files" {
     export XDG_CONFIG_HOME="$TEST_TEMP_DIR/.config"
     mkdir -p "$XDG_CONFIG_HOME/wslutil"
-    echo 'winexe: []' > "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    echo 'exes: {}' > "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     run "$WSLUTIL" config init --force
     [ "$status" -eq 0 ]
-    ! grep -q '^winexe: \[\]$' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
+    ! grep -q '^exes: {}$' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
     grep -q 'cmd.exe' "$XDG_CONFIG_HOME/wslutil/wslutil.yml"
 }
 

@@ -1,52 +1,58 @@
-winexe:
+exes:
   ########################################
-  # Windows Built (Direct SymLink)
-  # - These are the default windows commands that I want to be able to run from WSL
-  # - Beware though that file arguments may not work as expected unless you use the windows path
-  # - One benefit for using a direct symlink is that win-run does add about 500ms of overhead
+  # direct — symlink to Windows exe (no win-run overhead)
   ########################################
-  - cmd.exe #                 # You really really shouldnt be using this anymore...
-  - powerShell.exe #          #
-  - rundll32.exe #            # Used by win-browser & xdg-open for browser launch
-  - ipconfig.exe
-  - net.exe
-  - netsh.exe
-  - systeminfo.exe
-  - taskkill.exe
-  - tasklist.exe
-  #- "${WIN_PROGRAMFILES}/Microsoft VS Code/bin/code"
-  - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code/bin/code"
-  - "${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders"
-  - "${WIN_USERPROFILE}/AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe"
+  cmd.exe:
+    mode: direct
+  powerShell.exe:
+    mode: direct
+  rundll32.exe:
+    mode: direct
+  ipconfig.exe:
+    mode: direct
+  net.exe:
+    mode: direct
+  netsh.exe:
+    mode: direct
+  systeminfo.exe:
+    mode: direct
+  taskkill.exe:
+    mode: direct
+  tasklist.exe:
+    mode: direct
+  code:
+    mode: direct
+    path: ${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code/bin/code
+  code-insiders:
+    mode: direct
+    path: ${WIN_USERPROFILE}/AppData/Local/Programs/Microsoft VS Code Insiders/bin/code-insiders
+  brave.exe:
+    mode: direct
+    path: ${WIN_USERPROFILE}/AppData/Local/BraveSoftware/Brave-Browser/Application/brave.exe
+  winget.exe:
+    mode: direct
+  gsudo.exe:
+    mode: direct
   ########################################
-  # Windows ADMIN CLI Extras
+  # shim — symlink to win-run (path convert + UTF-8)
   ########################################
-  - winget.exe #     # (elevation)
-  - gsudo.exe #      # gsudo is a sudo replacement for windows that theoretically works with wsl (elevation)
-  # - SUDO.exe #       # Recased so as not to conflict with the linux sudo codmmand
-winrun:
-  ########################################
-  # Windows Built (Shim)
-  # - These are linked to win-run which will try to fix any arguments to be windows compatible
-  # - It will also attempt to fix the character encoding to utf8 for all output
-  ########################################
-  - curl.exe #              # Sometimes used to test network connectivity & proxy
-  - subst.exe
-  - reg.exe
-  - regedit.exe
-  - taskmgr.exe
-  - wsl.exe
-  ########################################
-  # Windows GUI Extras
-  # - Generally for gui apps its best to just utilize win-open <file> to open the file in the default app
-  # - Dont put applications like Word/Excel/Acrobat in here unless you dont want to use the default app
-  ########################################
-  # - explorer.exe #          # just use win-open .
-  # - msedgea.exe #           # just set it as your default browser and use win-browser
-  # - brave.exe #             # just set it as your default browser and use win-browser
-  # - librewolf.exe #         # just set it as your default browser and use win-browser
-  # - firefox.exe #           # just set it as your default browser and use win-browser
-  - notepad.exe #           # just set it as the default txt editor and use win-open
-  - notepad++.exe #         # just set it as the default txt editor and use win-open
-  - wt.exe #                # ive thought about trying to use wt.exe commands instead of tmux
-  - devmgmt.msc #             # Osccasionally need to see info about the system
+  curl.exe:
+    mode: shim
+  subst.exe:
+    mode: shim
+  reg.exe:
+    mode: shim
+  regedit.exe:
+    mode: shim
+  taskmgr.exe:
+    mode: shim
+  wsl.exe:
+    mode: shim
+  notepad.exe:
+    mode: shim
+  notepad++.exe:
+    mode: shim
+  wt.exe:
+    mode: shim
+  devmgmt.msc:
+    mode: shim
