@@ -10,18 +10,12 @@
 #  │                                                                              │
 #  └──────────────────────────────────────────────────────────────────────────────┘
 #  win-paste
-#  - This script is used to paste the contents of the Windows clipboard into the current WSL terminal STDOUT
-#  - It is best used to symlink wl-paste to this script (and place earlier in PATH) to allow for easy compatibility with tools expecting wl-paste
-#  - By default this tool strips trailing ^M (CR) characters from text for Unix line endings.
-#  - Use --raw to skip line-ending manipulation (binary / exact clipboard bytes).
-#  - Use --file-url / --file-path / --file-atpath to materialize clipboard content to a cache file.
-#  - wslutil checkhealth will tell you if you need this script or not
-#
-# Note: It is really a shame that wl-paste doesnt have an option for --strip-cr or similar to strip the ^M characters on its own. This is why this script is still needed for win11/wslg
+#  - Paste Windows clipboard to stdout (symlink as wl-paste for tool compatibility)
+#  - Default: strip trailing ^M (CR). Use --raw for exact bytes.
+#  - --file-url / --file-path / --file-atpath materialize to cache and emit a reference
 #
 set -euo pipefail
 
-# Check for help option
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<'EOF'
 win-paste - Paste from Windows clipboard to stdout
@@ -46,7 +40,7 @@ OPTIONS:
     --file-url      Materialize clipboard to cache; print file:// URL
     --file-path     Materialize clipboard to cache; print absolute path
     --file-atpath   Materialize clipboard to cache; print @<absolute-path>
-    --format FMT    Convert/write as png|jpeg|jpg|gif|webp|txt|html
+    --format FMT    Write as png|txt|html
 
     When WSLg is available, all wl-paste options are supported:
     -n, --no-newline    Don't add newline at end of output (DEFAULT)
@@ -64,32 +58,19 @@ EXAMPLES:
     win-paste --file-url --format png  # Materialize as PNG; print file:// URL
 
 NOTES:
-    - Logs usage to ~/.local/state/wslutil/win-clipboard.log
+    - Logs usage to ~/.local/state/wslutil/win-clipboard.log when WSLUTIL_DEBUG is set
     - Automatically handles Windows line endings unless --raw is used
     - Can be symlinked as wl-paste for compatibility
 EOF
     exit 0
 fi
 
-_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$_wsu_bin/../lib/wslutil-clipboard-file.sh" ]]; then
-    # shellcheck source=/dev/null
-    source "$_wsu_bin/../lib/wslutil-clipboard-file.sh"
-elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-clipboard-file.sh" ]]; then
-    # shellcheck source=/dev/null
-    source "$_wsu_bin/../share/wslutil/lib/wslutil-clipboard-file.sh"
-else
-    echo "win-paste: clipboard helper not found" >&2
-    exit 1
-fi
-
 WIN_WINDIR=${WIN_WINDIR:-/mnt/c/Windows}
-# Overridable for tests; production default is the WSLg binary.
 WL_PASTE=${WL_PASTE:-/usr/bin/wl-paste}
 
 RAW=0
 FILE_MODE="" # url|path|atpath|empty
-FORMAT=""    # optional short name
+FORMAT=""
 ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -137,18 +118,55 @@ if [[ -n "$FILE_MODE" && $RAW -eq 1 ]]; then
     exit 1
 fi
 
-if [[ -n "$FORMAT" ]]; then
-    wslutil_clipboard_format_ext "$FORMAT" >/dev/null || {
-        echo "win-paste: unsupported --format: $FORMAT" >&2
-        exit 1
-    }
+if [[ -n "$FORMAT" && "$FORMAT" != txt && "$FORMAT" != html && "$FORMAT" != png ]]; then
+    echo "win-paste: unsupported --format: $FORMAT (png|txt|html)" >&2
+    exit 1
 fi
 
 powershell_bin() {
     printf '%s' "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 }
 
-# Returns 0 and writes bytes to $1 when clipboard has plain text
+use_wlg() {
+    [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]
+}
+
+# --- materialize cache ---
+
+clipboard_cache_dir() {
+    local dir="${XDG_CACHE_HOME:-$HOME/.cache}/wslutil/clipboard"
+    mkdir -m 700 -p "$dir"
+    chmod 700 "$dir"
+    printf '%s' "$dir"
+}
+
+clipboard_store() {
+    local src="${1:?}" kind="${2:?}" ext="${3:?}"
+    local dir shortsum existing dest
+    [[ -f "$src" ]] || return 1
+    dir="$(clipboard_cache_dir)"
+    shortsum="$(sha256sum -- "$src" | awk '{print substr($1,1,12)}')"
+    # ponytail: glob scan fine for a personal clipboard cache
+    existing="$(compgen -G "$dir/clip-"*"-${kind}-${shortsum}.${ext}" || true)"
+    if [[ -n "$existing" ]]; then
+        printf '%s' "$(printf '%s\n' "$existing" | head -n1)"
+        return 0
+    fi
+    dest="${dir}/clip-$(date +%Y%m%d-%H%M%S)-${kind}-${shortsum}.${ext}"
+    cp -- "$src" "$dest"
+    chmod 600 "$dest"
+    printf '%s' "$dest"
+}
+
+clipboard_file_url() {
+    local abspath="${1:?}"
+    [[ "$abspath" == /* ]] || return 1
+    # ponytail: no percent-encoding; cache filenames are ASCII and HOME almost always is
+    printf 'file://%s' "$abspath"
+}
+
+# --- probes ---
+
 ps_try_text() {
     local out="$1"
     "$(powershell_bin)" -NoProfile -Command \
@@ -156,7 +174,6 @@ ps_try_text() {
         >"$out" 2>/dev/null
 }
 
-# Returns 0 and writes HTML to $1 when available
 ps_try_html() {
     local out="$1"
     "$(powershell_bin)" -NoProfile -Command \
@@ -164,7 +181,6 @@ ps_try_html() {
         >"$out" 2>/dev/null
 }
 
-# Returns 0 and writes PNG bytes to $1 when clipboard has an image
 ps_try_image_png() {
     local out="$1" win_out
     if command -v wslpath >/dev/null 2>&1; then
@@ -187,277 +203,218 @@ wl_try_mime() {
     "$WL_PASTE" -n -t "$mime" >"$out" 2>/dev/null && [[ -s "$out" ]]
 }
 
-# Convert BMP bytes file → PNG file. Uses magick/convert/ffmpeg when available.
+# BMP → PNG via ImageMagick only (magick, else convert).
 wl_bmp_to_png() {
     local src="${1:?}" dest="${2:?}"
     if command -v magick >/dev/null 2>&1; then
         magick "$src" "png:$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
-    fi
-    if command -v convert >/dev/null 2>&1; then
-        # Dest is often an extensionless mktemp path — force PNG codec
+    elif command -v convert >/dev/null 2>&1; then
         convert "$src" "png:$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
-    fi
-    if command -v ffmpeg >/dev/null 2>&1; then
-        ffmpeg -y -loglevel error -i "$src" -f image2 -c:v png "$dest" 2>/dev/null && [[ -s "$dest" ]] && return 0
     fi
     return 1
 }
 
-# Try image MIME ladder (png → jpeg → gif → webp → bmp→png). Sets KIND/EXT; writes to $2.
-wl_try_richest_image() {
+wl_try_bmp_as_png() {
     local types="$1" out="$2" mime bmp_tmp
-    for mime in image/png image/jpeg image/gif image/webp; do
-        if printf '%s\n' "$types" | grep -qx "$mime" && wl_try_mime "$mime" "$out"; then
-            KIND=image
-            case "$mime" in
-                image/png) EXT=png ;;
-                image/jpeg) EXT=jpg ;;
-                image/gif) EXT=gif ;;
-                image/webp) EXT=webp ;;
-            esac
-            return 0
-        fi
-    done
-    # Windows / Snipping Tool often offers only image/bmp via WSLg
     for mime in image/bmp image/x-ms-bmp; do
         if printf '%s\n' "$types" | grep -qx "$mime"; then
             bmp_tmp="$(mktemp)"
             if wl_try_mime "$mime" "$bmp_tmp" && wl_bmp_to_png "$bmp_tmp" "$out"; then
                 rm -f "$bmp_tmp"
-                KIND=image
-                EXT=png
                 return 0
             fi
             rm -f "$bmp_tmp"
-            # Convert unavailable or failed: PowerShell GetImage → PNG
-            if ps_try_image_png "$out"; then
-                KIND=image
-                EXT=png
-                return 0
-            fi
         fi
     done
-    # Any other image/* we didn't handle: last-resort PS GetImage
-    if printf '%s\n' "$types" | grep -q '^image/'; then
-        if ps_try_image_png "$out"; then
+    return 1
+}
+
+# Image ladder. png_only=1 → png mime or bmp→png only. Sets KIND/EXT.
+wl_try_image() {
+    local types="$1" out="$2" png_only="${3:-0}" mime
+    if [[ "$png_only" -eq 1 ]]; then
+        if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$out"; then
             KIND=image
             EXT=png
             return 0
         fi
-    fi
-    return 1
-}
-
-# WSLg richest ladder: image → text/html → text/plain (aligned with PS)
-wl_fetch_clipboard_payload() {
-    local format="${1:-}" tmp types bmp_tmp
-    tmp="$(mktemp)"
-    types="$(wl_list_types)"
-
-    if [[ -n "$format" ]]; then
-        case "$format" in
-            txt)
-                wl_try_mime text/plain "$tmp" || {
-                    rm -f "$tmp"
-                    echo "win-paste: no text on clipboard" >&2
-                    return 1
-                }
-                sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
-                PAYLOAD_FILE="$tmp"
-                KIND=text
-                EXT=txt
-                return 0
-                ;;
-            html)
-                wl_try_mime text/html "$tmp" || {
-                    rm -f "$tmp"
-                    echo "win-paste: no HTML on clipboard" >&2
-                    return 1
-                }
-                PAYLOAD_FILE="$tmp"
-                KIND=html
-                EXT=html
-                return 0
-                ;;
-            png)
-                if printf '%s\n' "$types" | grep -qx 'image/png' && wl_try_mime image/png "$tmp"; then
-                    PAYLOAD_FILE="$tmp"
-                    KIND=image
-                    EXT=png
-                    return 0
-                fi
-                # BMP-only clipboards (common on Windows) → PNG
-                for mime in image/bmp image/x-ms-bmp; do
-                    if printf '%s\n' "$types" | grep -qx "$mime"; then
-                        bmp_tmp="$(mktemp)"
-                        if wl_try_mime "$mime" "$bmp_tmp" && wl_bmp_to_png "$bmp_tmp" "$tmp"; then
-                            rm -f "$bmp_tmp"
-                            PAYLOAD_FILE="$tmp"
-                            KIND=image
-                            EXT=png
-                            return 0
-                        fi
-                        rm -f "$bmp_tmp"
-                    fi
-                done
-                if ps_try_image_png "$tmp"; then
-                    PAYLOAD_FILE="$tmp"
-                    KIND=image
-                    EXT=png
-                    return 0
-                fi
-                rm -f "$tmp"
-                echo "win-paste: no image on clipboard" >&2
-                return 1
-                ;;
-            jpeg | jpg | gif | webp)
-                rm -f "$tmp"
-                echo "win-paste: --format $format not supported yet (use png)" >&2
-                return 1
-                ;;
-            *)
-                rm -f "$tmp"
-                return 1
-                ;;
-        esac
-    fi
-
-    if wl_try_richest_image "$types" "$tmp"; then
-        PAYLOAD_FILE="$tmp"
-        return 0
-    fi
-    if printf '%s\n' "$types" | grep -qx 'text/html' && wl_try_mime text/html "$tmp"; then
-        PAYLOAD_FILE="$tmp"
-        KIND=html
-        EXT=html
-        return 0
-    fi
-    if wl_try_mime text/plain "$tmp"; then
-        sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
-        PAYLOAD_FILE="$tmp"
-        KIND=text
-        EXT=txt
-        return 0
-    fi
-    rm -f "$tmp"
-    echo "win-paste: clipboard empty or unsupported" >&2
-    return 1
-}
-
-# Sets globals PAYLOAD_FILE KIND EXT via temp file. format is optional.
-ps_fetch_clipboard_payload() {
-    local format="${1:-}" tmp
-    tmp="$(mktemp)"
-    if [[ -n "$format" ]]; then
-        case "$format" in
-            txt)
-                ps_try_text "$tmp" || {
-                    rm -f "$tmp"
-                    echo "win-paste: no text on clipboard" >&2
-                    return 1
-                }
-                # strip CR for stored text (materialize owns encoding; not --raw)
-                sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
-                PAYLOAD_FILE="$tmp"
-                KIND=text
-                EXT=txt
-                return 0
-                ;;
-            html)
-                ps_try_html "$tmp" || {
-                    rm -f "$tmp"
-                    echo "win-paste: no HTML on clipboard" >&2
-                    return 1
-                }
-                PAYLOAD_FILE="$tmp"
-                KIND=html
-                EXT=html
-                return 0
-                ;;
-            png)
-                ps_try_image_png "$tmp" || {
-                    rm -f "$tmp"
-                    echo "win-paste: no image on clipboard" >&2
-                    return 1
-                }
-                PAYLOAD_FILE="$tmp"
+    else
+        for mime in image/png image/jpeg image/gif image/webp; do
+            if printf '%s\n' "$types" | grep -qx "$mime" && wl_try_mime "$mime" "$out"; then
                 KIND=image
-                EXT=png
+                case "$mime" in
+                    image/png) EXT=png ;;
+                    image/jpeg) EXT=jpg ;;
+                    image/gif) EXT=gif ;;
+                    image/webp) EXT=webp ;;
+                esac
                 return 0
-                ;;
-            jpeg | jpg | gif | webp)
-                rm -f "$tmp"
-                echo "win-paste: --format $format not supported yet (use png)" >&2
-                return 1
-                ;;
-            *)
-                rm -f "$tmp"
-                return 1
-                ;;
-        esac
+            fi
+        done
     fi
-
-    # richest: image → html → text
-    if ps_try_image_png "$tmp"; then
-        PAYLOAD_FILE="$tmp"
+    if wl_try_bmp_as_png "$types" "$out"; then
         KIND=image
         EXT=png
         return 0
     fi
-    if ps_try_html "$tmp"; then
-        PAYLOAD_FILE="$tmp"
-        KIND=html
-        EXT=html
-        return 0
+    return 1
+}
+
+strip_cr_inplace() {
+    sed 's/\r$//' "$1" >"${1}.out" && mv "${1}.out" "$1"
+}
+
+try_text() {
+    local out="$1"
+    if use_wlg; then
+        wl_try_mime text/plain "$out"
+    else
+        ps_try_text "$out"
     fi
-    if ps_try_text "$tmp"; then
-        sed 's/\r$//' "$tmp" >"${tmp}.out" && mv "${tmp}.out" "$tmp"
-        PAYLOAD_FILE="$tmp"
-        KIND=text
-        EXT=txt
-        return 0
+}
+
+try_html() {
+    local out="$1"
+    if use_wlg; then
+        wl_try_mime text/html "$out"
+    else
+        ps_try_html "$out"
     fi
+}
+
+try_png() {
+    local out="$1" types
+    if use_wlg; then
+        types="$(wl_list_types)"
+        wl_try_image "$types" "$out" 1
+    else
+        ps_try_image_png "$out" && KIND=image && EXT=png
+    fi
+}
+
+# Sets PAYLOAD_FILE KIND EXT. format is optional (png|txt|html).
+fetch_clipboard_payload() {
+    local format="${1:-}" tmp types
+    tmp="$(mktemp)"
+
+    case "$format" in
+        txt)
+            try_text "$tmp" || {
+                rm -f "$tmp"
+                echo "win-paste: no text on clipboard" >&2
+                return 1
+            }
+            strip_cr_inplace "$tmp"
+            PAYLOAD_FILE="$tmp"
+            KIND=text
+            EXT=txt
+            return 0
+            ;;
+        html)
+            try_html "$tmp" || {
+                rm -f "$tmp"
+                echo "win-paste: no HTML on clipboard" >&2
+                return 1
+            }
+            PAYLOAD_FILE="$tmp"
+            KIND=html
+            EXT=html
+            return 0
+            ;;
+        png)
+            try_png "$tmp" || {
+                rm -f "$tmp"
+                echo "win-paste: no image on clipboard" >&2
+                return 1
+            }
+            PAYLOAD_FILE="$tmp"
+            return 0
+            ;;
+    esac
+
+    # richest: image → html → text
+    if use_wlg; then
+        types="$(wl_list_types)"
+        if wl_try_image "$types" "$tmp" 0; then
+            PAYLOAD_FILE="$tmp"
+            return 0
+        fi
+        if printf '%s\n' "$types" | grep -qx 'text/html' && wl_try_mime text/html "$tmp"; then
+            PAYLOAD_FILE="$tmp"
+            KIND=html
+            EXT=html
+            return 0
+        fi
+        if wl_try_mime text/plain "$tmp"; then
+            strip_cr_inplace "$tmp"
+            PAYLOAD_FILE="$tmp"
+            KIND=text
+            EXT=txt
+            return 0
+        fi
+    else
+        if ps_try_image_png "$tmp"; then
+            PAYLOAD_FILE="$tmp"
+            KIND=image
+            EXT=png
+            return 0
+        fi
+        if ps_try_html "$tmp"; then
+            PAYLOAD_FILE="$tmp"
+            KIND=html
+            EXT=html
+            return 0
+        fi
+        if ps_try_text "$tmp"; then
+            strip_cr_inplace "$tmp"
+            PAYLOAD_FILE="$tmp"
+            KIND=text
+            EXT=txt
+            return 0
+        fi
+    fi
+
     rm -f "$tmp"
     echo "win-paste: clipboard empty or unsupported" >&2
     return 1
 }
 
-fetch_clipboard_payload() {
-    local format="${1:-}"
-    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]; then
-        wl_fetch_clipboard_payload "$format"
-    else
-        ps_fetch_clipboard_payload "$format"
-    fi
-}
-
-materialize_clipboard_and_emit() {
-    local mode="$1" format="${2:-}" path store_status=0
+materialize_and_emit() {
+    local mode="$1" format="${2:-}" path
     fetch_clipboard_payload "$format" || return 1
-    path="$(wslutil_clipboard_store "$PAYLOAD_FILE" "$KIND" "$EXT")" || store_status=$?
+    path="$(clipboard_store "$PAYLOAD_FILE" "$KIND" "$EXT")" || {
+        rm -f "$PAYLOAD_FILE"
+        return 1
+    }
     rm -f "$PAYLOAD_FILE"
-    [[ $store_status -eq 0 ]] || return "$store_status"
-    wslutil_clipboard_emit "$mode" "$path"
-    printf '\n'
+    case "$mode" in
+        path) printf '%s\n' "$path" ;;
+        atpath) printf '@%s\n' "$path" ;;
+        url) printf '%s\n' "$(clipboard_file_url "$path")" ;;
+    esac
 }
 
 if [[ -n "$FILE_MODE" ]]; then
-    materialize_clipboard_and_emit "$FILE_MODE" "$FORMAT"
+    materialize_and_emit "$FILE_MODE" "$FORMAT"
     exit $?
 fi
 
+debug_log() {
+    local backend="$1"
+    shift
+    local parent_cmd
+    [[ -n "${WSLUTIL_DEBUG:-}" ]] || return 0
+    mkdir -p "${HOME}/.local/state/wslutil"
+    parent_cmd="$(ps -p "${PPID}" -o cmd= 2>/dev/null | cut -f1 -d' ' || true)"
+    echo "$(date --rfc-3339=s) - ${backend} [$(basename -- "${parent_cmd}")] $(basename -- "${0}") $*" >>"${HOME}/.local/state/wslutil/win-clipboard.log"
+}
+
 paste_clipboard() {
-    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]; then
-        if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-            mkdir -p ${HOME}/.local/state/wslutil
-            echo "$(date --rfc-3339=s) - $WL_PASTE [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
-        fi
+    if use_wlg; then
+        debug_log "$WL_PASTE" "$@"
         "$WL_PASTE" -n "$@"
     else
-        if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-            mkdir -p ${HOME}/.local/state/wslutil
-            echo "$(date --rfc-3339=s) - win-paste script [$(basename -- $(ps -p $PPID -o cmd= | cut -f1 -d' '))] $(basename ${0}) ${*}" >>${HOME}/.local/state/wslutil/win-clipboard.log
-        fi
+        debug_log "win-paste script" "$@"
         "$(powershell_bin)" -NoProfile -Command '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; [Console]::Out.Write((Get-Clipboard -Raw).ToString())'
     fi
 }
@@ -465,6 +422,5 @@ paste_clipboard() {
 if [[ $RAW -eq 1 ]]; then
     paste_clipboard "${ARGS[@]}"
 else
-    # Strip trailing CR (CRLF -> LF). Use --raw for binary / exact bytes.
     paste_clipboard "${ARGS[@]}" | sed 's/\r$//'
 fi

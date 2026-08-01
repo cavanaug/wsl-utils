@@ -103,6 +103,7 @@ check_command() {
 }
 
 # Command checks (full paths)
+# ImageMagick (magick|convert): checked separately — win-paste WSLg BMP→PNG
 REQUIRED_COMMANDS=(
     "/usr/bin/crudini"
     "/usr/bin/yq"
@@ -212,6 +213,18 @@ for cmd_path in "${REQUIRED_COMMANDS[@]}"; do
     fi
     printf "] %s\n" "$cmd_path"
 done
+
+# win-paste BMP→PNG: either ImageMagick binary is enough
+printf "["
+if [[ -x /usr/bin/magick || -x /usr/bin/convert ]]; then
+    printf "$CHECK"
+else
+    printf "$CROSS"
+    ((MISSING_COMMANDS+=1))
+    # apt-file hint via convert (imagemagick package)
+    MISSING_COMMAND_PATHS["/usr/bin/convert"]=1
+fi
+printf "] %s\n" "/usr/bin/magick or /usr/bin/convert"
 
 ### Environment Checks
 printf "\n${BLUE}=====  %-20s  =====${RESET}\n" "Environment Checks"

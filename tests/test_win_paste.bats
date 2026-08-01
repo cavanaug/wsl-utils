@@ -167,14 +167,14 @@ teardown() {
     [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
 }
 
-@test "win-paste --format jpeg errors with use png hint" {
+@test "win-paste --format jpeg is unsupported" {
     export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
     export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
     printf 'nope' >"$WIN_PASTE_FIXTURE"
 
     run win-paste --file-path --format jpeg
     [ "$status" -ne 0 ]
-    [[ "$output" =~ use\ png || "$stderr" =~ use\ png ]]
+    [[ "$output" =~ unsupported || "$stderr" =~ unsupported ]]
 }
 
 @test "win-paste WSLg path materializes jpeg via wl-paste ladder" {
@@ -213,8 +213,8 @@ EOF
 }
 
 @test "win-paste WSLg path converts image/bmp to png" {
-    if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1 && ! command -v ffmpeg >/dev/null 2>&1; then
-        skip "ImageMagick or ffmpeg required for BMP→PNG"
+    if ! command -v magick >/dev/null 2>&1 && ! command -v convert >/dev/null 2>&1; then
+        skip "ImageMagick (magick or convert) required for BMP→PNG"
     fi
 
     export WSL2_GUI_APPS_ENABLED=1

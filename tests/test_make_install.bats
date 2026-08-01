@@ -23,7 +23,6 @@ teardown() {
     [ -f "$PREFIX/share/wslutil/lib/wslutil-paths.sh" ]
     [ -f "$PREFIX/share/wslutil/lib/wslutil-setup-common.sh" ]
     [ -f "$PREFIX/share/wslutil/lib/wslutil-exes-config.sh" ]
-    [ -f "$PREFIX/share/wslutil/lib/wslutil-clipboard-file.sh" ]
     [ -f "$PREFIX/share/wslutil/VERSION" ]
     [ -L "$PREFIX/bin/wslview" ] || [ -f "$PREFIX/bin/wslview" ]
 }
