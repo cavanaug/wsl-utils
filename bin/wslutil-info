@@ -70,5 +70,21 @@ if [[ "$JSON" -eq 1 ]] && ! command -v yq >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "wslutil-info: not implemented" >&2
-exit 1
+wslutil_info_collect_versions
+wslutil_info_collect_runtime
+# INFO_RT_NET_CFG filled in Task 4; until then leave unset → "unset (default nat)"
+
+if [[ "$JSON" -eq 1 ]]; then
+    echo "wslutil-info: --json not implemented" >&2
+    exit 1
+fi
+
+wslutil_info_print_human_host_versions
+wslutil_info_print_human_runtime
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    : # Task 4
+fi
+if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
+    : # Task 5
+fi
+exit 0

@@ -62,3 +62,49 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "--json" ]]
 }
+
+make_fakebin() {
+    FAKEBIN="$TEST_TEMP_DIR/fakebin"
+    mkdir -p "$FAKEBIN"
+    cat >"$FAKEBIN/wslinfo" <<'EOF'
+#!/bin/bash
+case "$1" in
+--version) echo "2.7.12.0" ;;
+--networking-mode) echo "mirrored" ;;
+--vm-id) echo "{11111111-2222-3333-4444-555555555555}" ;;
+--msal-proxy-path) echo "/mnt/c/fake/msal" ;;
+*) exit 1 ;;
+esac
+EOF
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "--version" ]]; then
+    cat <<'VER'
+WSL version: 2.7.12.0
+Kernel version: 6.18.33.2-2
+WSLg version: 1.0.73.2
+MSRDC version: 1.2.7214
+Direct3D version: 1.611.1-81528511
+DXCore version: 10.0.26100.1-240331-1435.ge-release
+Windows version: 10.0.26200.9106
+VER
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$FAKEBIN/wslinfo" "$FAKEBIN/wsl.exe"
+}
+
+@test "human report prints wslinfo version and networkingMode" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSLUTIL_INFO_SKIP_DISTRO=1
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2.7.12.0" ]]
+    [[ "$output" =~ "mirrored" ]]
+    [[ "$output" =~ "1.0.73.2" ]]
+}

@@ -93,3 +93,91 @@ wslutil_info_should_omit() {
     [[ "$nv" == "$nd" ]] && return 0
     return 1
 }
+
+wslutil_info_cmd_wslinfo() { echo "${WSLUTIL_INFO_WSLINFO:-wslinfo}"; }
+wslutil_info_cmd_wsl() { echo "${WSLUTIL_INFO_WSL:-wsl.exe}"; }
+wslutil_info_cmd_win_utf8() {
+    if [[ -n "${WSLUTIL_INFO_WIN_UTF8:-}" ]]; then
+        echo "$WSLUTIL_INFO_WIN_UTF8"
+        return
+    fi
+    local b="${_wsu_bin:-}"
+    if [[ -n "$b" && -x "$b/win-utf8" ]]; then
+        echo "$b/win-utf8"
+    else
+        echo "win-utf8"
+    fi
+}
+
+wslutil_info_collect_versions() {
+    INFO_VER_WSL=""
+    INFO_VER_WSL_EXE=""
+    INFO_VER_KERNEL=""
+    INFO_VER_WSLG=""
+    INFO_VER_MSRDC=""
+    INFO_VER_D3D=""
+    INFO_VER_DXCORE=""
+    INFO_VER_WINDOWS=""
+    local wi ws u8
+    wi="$(wslutil_info_cmd_wslinfo)"
+    ws="$(wslutil_info_cmd_wsl)"
+    u8="$(wslutil_info_cmd_win_utf8)"
+    if command -v "$wi" >/dev/null 2>&1 || [[ -x "$wi" ]]; then
+        INFO_VER_WSL="$("$wi" --version 2>/dev/null | tr -d '\r' || true)"
+    fi
+    local ver
+    if ver="$("$ws" --version 2>/dev/null | "$u8" 2>/dev/null || true)"; then
+        INFO_VER_WSL_EXE="$(printf '%s\n' "$ver" | awk -F': ' '/^WSL version:/ {print $2; exit}')"
+        INFO_VER_KERNEL="$(printf '%s\n' "$ver" | awk -F': ' '/^Kernel version:/ {print $2; exit}')"
+        INFO_VER_WSLG="$(printf '%s\n' "$ver" | awk -F': ' '/^WSLg version:/ {print $2; exit}')"
+        INFO_VER_MSRDC="$(printf '%s\n' "$ver" | awk -F': ' '/^MSRDC version:/ {print $2; exit}')"
+        INFO_VER_D3D="$(printf '%s\n' "$ver" | awk -F': ' '/^Direct3D version:/ {print $2; exit}')"
+        INFO_VER_DXCORE="$(printf '%s\n' "$ver" | awk -F': ' '/^DXCore version:/ {print $2; exit}')"
+        INFO_VER_WINDOWS="$(printf '%s\n' "$ver" | awk -F': ' '/^Windows version:/ {print $2; exit}')"
+    fi
+}
+
+wslutil_info_collect_runtime() {
+    INFO_RT_NET=""
+    INFO_RT_VMID=""
+    INFO_RT_MSAL=""
+    local wi
+    wi="$(wslutil_info_cmd_wslinfo)"
+    if ! command -v "$wi" >/dev/null 2>&1 && [[ ! -x "$wi" ]]; then
+        return 0
+    fi
+    INFO_RT_NET="$("$wi" --networking-mode 2>/dev/null | tr -d '\r' || true)"
+    INFO_RT_VMID="$("$wi" --vm-id 2>/dev/null | tr -d '\r' || true)"
+    INFO_RT_MSAL="$("$wi" --msal-proxy-path 2>/dev/null | tr -d '\r' || true)"
+}
+
+wslutil_info_or_unavail() {
+    if [[ -n "${1:-}" ]]; then
+        printf '%s' "$1"
+    else
+        printf 'unavailable'
+    fi
+}
+
+wslutil_info_print_human_host_versions() {
+    printf '== Host ==\n'
+    printf 'Versions\n'
+    printf '  WSL:       %s\n' "$(wslutil_info_or_unavail "${INFO_VER_WSL:-}")"
+    if [[ -n "${INFO_VER_WSL:-}" && -n "${INFO_VER_WSL_EXE:-}" && "${INFO_VER_WSL}" != "${INFO_VER_WSL_EXE}" ]]; then
+        printf '  WSL (exe): %s  (mismatch)\n' "$INFO_VER_WSL_EXE"
+    fi
+    printf '  Kernel:    %s\n' "$(wslutil_info_or_unavail "${INFO_VER_KERNEL:-}")"
+    printf '  WSLg:      %s\n' "$(wslutil_info_or_unavail "${INFO_VER_WSLG:-}")"
+    printf '  MSRDC:     %s\n' "$(wslutil_info_or_unavail "${INFO_VER_MSRDC:-}")"
+    printf '  Direct3D:  %s\n' "$(wslutil_info_or_unavail "${INFO_VER_D3D:-}")"
+    printf '  DXCore:    %s\n' "$(wslutil_info_or_unavail "${INFO_VER_DXCORE:-}")"
+    printf '  Windows:   %s\n' "$(wslutil_info_or_unavail "${INFO_VER_WINDOWS:-}")"
+}
+
+wslutil_info_print_human_runtime() {
+    printf 'Runtime\n'
+    printf '  networkingMode:  %s\n' "$(wslutil_info_or_unavail "${INFO_RT_NET:-}")"
+    printf '  configured:      %s\n' "${INFO_RT_NET_CFG:-unset (default nat)}"
+    printf '  vmId:            %s\n' "$(wslutil_info_or_unavail "${INFO_RT_VMID:-}")"
+    printf '  msalProxyPath:   %s\n' "$(wslutil_info_or_unavail "${INFO_RT_MSAL:-}")"
+}
