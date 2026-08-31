@@ -100,13 +100,16 @@ fi
 wslutil_info_print_human_host_versions
 wslutil_info_print_human_runtime
 if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
-    local_wslc="${WIN_USERPROFILE:-}/.wslconfig"
-    local_wslg="${WIN_USERPROFILE:-}/.wslgconfig"
-    win_wslc="unavailable"
-    win_wslg="unavailable"
     if [[ -n "${WIN_USERPROFILE:-}" ]]; then
+        local_wslc="$WIN_USERPROFILE/.wslconfig"
+        local_wslg="$WIN_USERPROFILE/.wslgconfig"
         win_wslc="$(wslpath -w "$local_wslc" 2>/dev/null || echo "$local_wslc")"
         win_wslg="$(wslpath -w "$local_wslg" 2>/dev/null || echo "$local_wslg")"
+    else
+        local_wslc="unavailable"
+        local_wslg="unavailable"
+        win_wslc="unavailable"
+        win_wslg="unavailable"
     fi
     wslutil_info_print_human_ini_block ".wslconfig" "$win_wslc" "$local_wslc" wslconfig "$local_wslc"
     wslutil_info_print_human_wslg "$win_wslg" "$local_wslg" "$local_wslg"

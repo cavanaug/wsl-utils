@@ -153,7 +153,6 @@ EOF
     export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
     export WSLUTIL_INFO_WIN_UTF8="cat"
     export WSLUTIL_INFO_SKIP_DISTRO=1
-    export WSLUTIL_INFO_SKIP_CONFIG=1
     unset WIN_USERPROFILE WIN_LOCALAPPDATA WIN_APPDATA
     run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
     [ "$status" -eq 0 ]
