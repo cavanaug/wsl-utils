@@ -127,8 +127,25 @@ powershell_bin() {
     printf '%s' "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe"
 }
 
+# Remote SSH (not from loopback) — WSLg clipboard is the local Windows session.
+ssh_is_remote() {
+    [[ -n "${SSH_CONNECTION:-}" ]] || return 1
+    local client="${SSH_CONNECTION%% *}"
+    [[ "$client" != "127.0.0.1" && "$client" != "::1" ]]
+}
+
 use_wlg() {
-    [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x "$WL_PASTE" ]]
+    [[ -x "$WL_PASTE" ]] || return 1
+    ssh_is_remote && return 1
+    # Explicit override (tests set 0; Windows Terminal usually sets 1)
+    case "${WSL2_GUI_APPS_ENABLED:-}" in
+        1) return 0 ;;
+        0) return 1 ;;
+    esac
+    # Local/no-SSH often lacks WSL2_GUI_APPS_ENABLED; probe WSLg Wayland instead
+    local runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local display="${WAYLAND_DISPLAY:-wayland-0}"
+    [[ -e "${runtime}/${display}" ]]
 }
 
 # --- materialize cache ---

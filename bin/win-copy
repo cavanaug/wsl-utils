@@ -102,11 +102,31 @@ trap 'rm -f "${input_file}"' EXIT
 cat >"${input_file}"
 
 if is_wsl; then
-    if [[ ${WSL2_GUI_APPS_ENABLED:-} == "1" && -x /usr/bin/wl-copy ]]; then
+    # Prefer WSLg when enabled/Wayland-up; skip for remote SSH (not loopback)
+    _wslg=0
+    _ssh_remote=0
+    if [[ -n "${SSH_CONNECTION:-}" ]]; then
+        _ssh_client="${SSH_CONNECTION%% *}"
+        [[ "$_ssh_client" != "127.0.0.1" && "$_ssh_client" != "::1" ]] && _ssh_remote=1
+    fi
+    if [[ $_ssh_remote -eq 0 && -x /usr/bin/wl-copy ]]; then
+        case "${WSL2_GUI_APPS_ENABLED:-}" in
+            1) _wslg=1 ;;
+            0) _wslg=0 ;;
+            *)
+                _runtime="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+                _display="${WAYLAND_DISPLAY:-wayland-0}"
+                [[ -e "${_runtime}/${_display}" ]] && _wslg=1
+                ;;
+        esac
+    fi
+    if [[ $_wslg -eq 1 ]]; then
+        unset _wslg _ssh_remote _ssh_client _runtime _display
         debug_log "/usr/bin/wl-copy (wslg)"
         /usr/bin/wl-copy "$@" <"${input_file}"
         exit $?
     fi
+    unset _wslg _ssh_remote _ssh_client _runtime _display
 
     if [[ -x "${WIN_WINDIR}/System32/clip.exe" ]]; then
         debug_log "${WIN_WINDIR}/System32/clip.exe"

@@ -6,7 +6,7 @@ setup() {
     setup_test_env
 
     # Force PowerShell fallback path (avoid hardcoded /usr/bin/wl-paste).
-    unset WSL2_GUI_APPS_ENABLED || true
+    unset WSL2_GUI_APPS_ENABLED SSH_CONNECTION SSH_CLIENT SSH_TTY || true
     export WSL2_GUI_APPS_ENABLED=0
 
     mkdir -p "$TEST_TEMP_DIR/Windows/System32/WindowsPowerShell/v1.0"
@@ -210,6 +210,92 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ -image-[0-9a-f]{12}\.jpg$ ]]
     [ "$(cat "$output")" = "fake-jpeg-bytes" ]
+}
+
+# Local SSH / no SSH often lacks WSL2_GUI_APPS_ENABLED even when WSLg wayland is up.
+@test "win-paste uses wl-paste when GUI env unset but wayland socket exists" {
+    unset WSL2_GUI_APPS_ENABLED
+    export SSH_CONNECTION="127.0.0.1 52233 127.0.0.1 22"
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export XDG_RUNTIME_DIR="$TEST_TEMP_DIR/runtime"
+    export WAYLAND_DISPLAY=wayland-0
+    export WL_PASTE="$TEST_TEMP_DIR/fake-wl-paste"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    # socket-ish node; -e is enough for detection
+    python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])" \
+        "$XDG_RUNTIME_DIR/wayland-0"
+
+    cat >"$WL_PASTE" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "-l" ]]; then
+    printf 'text/plain\n'
+    exit 0
+fi
+mime=""
+prev=""
+for a in "$@"; do
+    if [[ "$prev" == "-t" || "$prev" == "--type" ]]; then
+        mime="$a"
+    fi
+    prev="$a"
+done
+if [[ "$mime" == "text/plain" ]]; then
+    printf 'ssh-wslg-text'
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$WL_PASTE"
+
+    run win-paste --file-atpath
+    [ "$status" -eq 0 ]
+    [[ "$output" == @/*-text-*.txt ]]
+    [ "$(cat "${output#@}")" = "ssh-wslg-text" ]
+}
+
+@test "win-paste skips WSLg for remote SSH even with wayland" {
+    unset WSL2_GUI_APPS_ENABLED
+    export SSH_CONNECTION="192.168.1.50 52233 192.168.1.10 22"
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export XDG_RUNTIME_DIR="$TEST_TEMP_DIR/runtime"
+    export WAYLAND_DISPLAY=wayland-0
+    export WL_PASTE="$TEST_TEMP_DIR/fake-wl-paste"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])" \
+        "$XDG_RUNTIME_DIR/wayland-0"
+    printf 'remote-ps' >"$WIN_PASTE_FIXTURE"
+    cat >"$WL_PASTE" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$WL_PASTE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output")" = "remote-ps" ]
+}
+
+@test "win-paste keeps PowerShell when WSL2_GUI_APPS_ENABLED=0 despite wayland" {
+    export WSL2_GUI_APPS_ENABLED=0
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export XDG_RUNTIME_DIR="$TEST_TEMP_DIR/runtime"
+    export WAYLAND_DISPLAY=wayland-0
+    export WL_PASTE="$TEST_TEMP_DIR/fake-wl-paste"
+    export WIN_PASTE_FIXTURE="$TEST_TEMP_DIR/clip.txt"
+    mkdir -p "$XDG_RUNTIME_DIR"
+    python3 -c "import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])" \
+        "$XDG_RUNTIME_DIR/wayland-0"
+    printf 'ps-path' >"$WIN_PASTE_FIXTURE"
+    cat >"$WL_PASTE" <<'EOF'
+#!/bin/bash
+exit 1
+EOF
+    chmod +x "$WL_PASTE"
+
+    run win-paste --file-path
+    [ "$status" -eq 0 ]
+    [ "$(cat "$output")" = "ps-path" ]
 }
 
 @test "win-paste WSLg path converts image/bmp to png" {
