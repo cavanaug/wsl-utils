@@ -1,0 +1,154 @@
+#!/usr/bin/bash
+# wslutil-info - Read-only WSL environment report
+set -euo pipefail
+
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-paths.sh"
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-info.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-paths.sh"
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-info.sh"
+else
+    echo "wslutil-info: path helper not found" >&2
+    exit 1
+fi
+
+if [[ -z "${WIN_USERPROFILE:-}" && "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    if [[ -f "$_wsu_bin/../lib/wslutil-setup-common.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$_wsu_bin/../lib/wslutil-setup-common.sh"
+    elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh"
+    fi
+    if declare -F bootstrap_win_env_if_needed >/dev/null 2>&1; then
+        log_info() { :; }
+        log_warning() { :; }
+        bootstrap_win_env_if_needed
+    fi
+fi
+
+show_help() {
+    cat <<EOF
+Usage: wslutil-info [--json] [--distro NAME]
+
+Read-only report of the WSL host and one distro (default: this instance).
+
+Options:
+  --json         Machine-readable JSON on stdout
+  --distro NAME  Fill the distro block for NAME instead of this instance
+  --help         Show this help and exit
+EOF
+}
+
+JSON=0
+DISTRO=""
+DISTRO_FLAG_SET=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help)
+        show_help
+        exit 0
+        ;;
+    --json)
+        JSON=1
+        shift
+        ;;
+    --distro)
+        DISTRO_FLAG_SET=1
+        if [[ $# -lt 2 ]]; then
+            echo "wslutil-info: --distro requires a name" >&2
+            show_help >&2
+            exit 1
+        fi
+        DISTRO="$2"
+        shift 2
+        ;;
+    --distro=*)
+        DISTRO_FLAG_SET=1
+        DISTRO="${1#--distro=}"
+        shift
+        ;;
+    *)
+        echo "wslutil-info: unknown option: $1" >&2
+        show_help >&2
+        exit 1
+        ;;
+    esac
+done
+
+if [[ "$DISTRO_FLAG_SET" -eq 1 && -z "$DISTRO" ]]; then
+    echo "wslutil-info: --distro requires a non-empty name" >&2
+    show_help >&2
+    exit 1
+fi
+
+if [[ "$JSON" -eq 1 ]] && ! command -v yq >/dev/null 2>&1; then
+    echo "wslutil-info: --json requires yq" >&2
+    exit 1
+fi
+
+wslutil_info_collect_versions
+wslutil_info_collect_runtime
+INFO_RT_NET_CFG=""
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 && -n "${WIN_USERPROFILE:-}" && -f "$WIN_USERPROFILE/.wslconfig" ]] && command -v crudini >/dev/null 2>&1; then
+    INFO_RT_NET_CFG="$(crudini --get "$WIN_USERPROFILE/.wslconfig" wsl2 networkingMode 2>/dev/null || true)"
+fi
+
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    wslutil_info_collect_host_config
+fi
+
+DISTRO_UNAVAILABLE=""
+if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
+    wslutil_info_collect_distro_list
+    target="${DISTRO:-${WSL_DISTRO_NAME:-}}"
+    if [[ -z "$target" ]]; then
+        DISTRO_UNAVAILABLE="WSL_DISTRO_NAME unset"
+    elif [[ "$INFO_DISTRO_LIST_OK" -eq 0 ]]; then
+        DISTRO_UNAVAILABLE="could not list distros"
+    elif row="$(wslutil_info_resolve_distro "$target")"; then
+        IFS=$'\t' read -r dname dstate dver ddef <<<"$row"
+        INFO_DISTRO_AVAILABLE=1
+        wslutil_info_collect_distro_fields "$dname" "$dstate" "$dver" "$ddef"
+    else
+        echo "wslutil-info: unknown distro: $target" >&2
+        echo "Available:" >&2
+        for row in "${INFO_DISTRO_ROWS[@]}"; do
+            IFS=$'\t' read -r dname _rest <<<"$row"
+            echo "  $dname" >&2
+        done
+        exit 1
+    fi
+    if [[ -n "$DISTRO_UNAVAILABLE" ]]; then
+        INFO_DISTRO_AVAILABLE=0
+        INFO_DISTRO_REASON="$DISTRO_UNAVAILABLE"
+    fi
+fi
+
+if [[ "$JSON" -eq 1 ]]; then
+    wslutil_info_emit_json
+    exit 0
+fi
+
+wslutil_info_print_human_host_versions
+wslutil_info_print_human_runtime
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    wslutil_info_print_human_ini_block ".wslconfig" "${INFO_WSLCONFIG_WIN:-unavailable}" "${INFO_WSLCONFIG_WSL:-unavailable}" \
+        "${INFO_WSLCONFIG_LINES:-}" "${INFO_WSLCONFIG_UNAVAIL_REASON:-}" "${INFO_WSLCONFIG_EXISTS:-0}"
+    wslutil_info_print_human_wslg "${INFO_WSLGCONFIG_WIN:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}" \
+        "${INFO_WSLG_LINES:-}" "${INFO_WSLG_UNAVAIL_REASON:-}" "${INFO_WSLGCONFIG_EXISTS:-0}"
+fi
+if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
+    if [[ -n "$DISTRO_UNAVAILABLE" ]]; then
+        printf '== Distro ==\n  unavailable (%s)\n' "$DISTRO_UNAVAILABLE"
+    else
+        wslutil_info_print_human_distro
+    fi
+fi
+exit 0
