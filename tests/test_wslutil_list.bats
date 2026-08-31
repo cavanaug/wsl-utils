@@ -227,3 +227,50 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ yq ]]
 }
+
+@test "--location adds column and JSON key; off skips powershell" {
+    make_list_fakebin
+    seed_file_root
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    export WSLUTIL_LIST_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Ubuntu\tC:\\Users\\foo\\Ubuntu\n' >"$WSLUTIL_LIST_LXSS"
+    printf 'debian\tC:\\Users\\foo\\debian\n' >>"$WSLUTIL_LIST_LXSS"
+    local ps="$FAKEBIN/powershell.exe"
+    cat >"$ps" <<'EOF'
+#!/bin/bash
+echo invoked >>"${WSLUTIL_LIST_PS_LOG}"
+exit 1
+EOF
+    chmod +x "$ps"
+    export WSLUTIL_LIST_POWERSHELL="$ps"
+    export WSLUTIL_LIST_PS_LOG="$TEST_TEMP_DIR/ps.log"
+    : >"$WSLUTIL_LIST_PS_LOG"
+
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *LOCATION* ]]
+    [[ ! -s "$WSLUTIL_LIST_PS_LOG" ]]
+
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --location
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ LOCATION ]]
+    [[ "$output" =~ "C:\\Users\\foo\\Ubuntu" ]]
+    [[ ! -s "$WSLUTIL_LIST_PS_LOG" ]]
+
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --json --location
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.[0].location' -)" = 'C:\Users\foo\Ubuntu' ]
+    [ "$(echo "$output" | yq eval '.[1].location' -)" = 'C:\Users\foo\debian' ]
+    [ "$(echo "$output" | yq eval '.[2].location' -)" = "null" ]
+}
+
+@test "--location with no map still prints table" {
+    make_list_fakebin
+    seed_file_root
+    unset WSLUTIL_LIST_LXSS
+    export WSLUTIL_LIST_POWERSHELL="$TEST_TEMP_DIR/missing-ps"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --location
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ LOCATION ]]
+    [[ "$output" =~ Ubuntu ]]
+}

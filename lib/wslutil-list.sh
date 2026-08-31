@@ -72,6 +72,12 @@ wslutil_list_hostname_configured_value() {
     fi
 }
 
+wslutil_list_parse_row() {
+    local -n _out=$1
+    local row=$2
+    mapfile -t _out < <(printf '%s' "$row" | awk -F'\t' '{for (i = 1; i <= 8; i++) print $i}')
+}
+
 LIST_ROWS=()
 LIST_WANT_LOCATION=0
 LIST_WANT_JSON=0
@@ -130,12 +136,16 @@ wslutil_list_wslconf_hostname() {
 }
 
 wslutil_list_lxss_map() {
-    # Task 4 fills this. Default: no output.
     if [[ -n "${WSLUTIL_LIST_LXSS:-}" && -f "$WSLUTIL_LIST_LXSS" ]]; then
         cat "$WSLUTIL_LIST_LXSS"
         return 0
     fi
-    return 0
+    local ps u8 out
+    ps="$(wslutil_list_cmd_powershell)"
+    command -v "$ps" >/dev/null 2>&1 || return 0
+    u8="$(wslutil_list_cmd_win_utf8)"
+    out="$("$ps" -NoProfile -Command "Get-ChildItem HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss | ForEach-Object { \$n = \$_.GetValue('DistributionName'); if (\$n) { \$n + [char]9 + \$_.GetValue('BasePath') } }" 2>/dev/null | "$u8" || true)"
+    printf '%s\n' "$out"
 }
 
 wslutil_list_collect() {
@@ -190,11 +200,19 @@ wslutil_list_dash() {
 
 wslutil_list_print_human() {
     local row name state ver def typ host hconf loc star
-    local -a stars names states vers types hosts locs
+    local -a stars names states vers types hosts locs fields
     local w_name=4 w_state=5 w_ver=3 w_type=4 w_host=8 w_loc=8
     stars=(); names=(); states=(); vers=(); types=(); hosts=(); locs=()
     for row in "${LIST_ROWS[@]}"; do
-        IFS=$'\t' read -r name state ver def typ host hconf loc <<<"$row"
+        wslutil_list_parse_row fields "$row"
+        name=${fields[0]}
+        state=${fields[1]}
+        ver=${fields[2]}
+        def=${fields[3]}
+        typ=${fields[4]}
+        host=${fields[5]}
+        hconf=${fields[6]}
+        loc=${fields[7]}
         star=" "
         [[ "$def" == "yes" ]] && star="*"
         [[ "$ver" =~ ^[12]$ ]] || ver="-"
@@ -236,10 +254,19 @@ wslutil_list_print_human() {
 
 wslutil_list_print_json() {
     local tmp row name state ver def typ host hconf loc
+    local -a fields
     tmp="$(mktemp)"
     yq eval -n '[]' >"$tmp"
     for row in "${LIST_ROWS[@]}"; do
-        IFS=$'\t' read -r name state ver def typ host hconf loc <<<"$row"
+        wslutil_list_parse_row fields "$row"
+        name=${fields[0]}
+        state=${fields[1]}
+        ver=${fields[2]}
+        def=${fields[3]}
+        typ=${fields[4]}
+        host=${fields[5]}
+        hconf=${fields[6]}
+        loc=${fields[7]}
         export _ln="$name" _ls="$state" _lv="$ver" _ld="$def" _lt="$typ" _lh="$host" _lc="$hconf" _ll="$loc"
         if [[ "$LIST_WANT_LOCATION" -eq 1 ]]; then
             yq eval -i '. += [{
