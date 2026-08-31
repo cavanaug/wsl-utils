@@ -27,6 +27,8 @@ if [[ -z "${WIN_USERPROFILE:-}" && "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; the
         source "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh"
     fi
     if declare -F bootstrap_win_env_if_needed >/dev/null 2>&1; then
+        log_info() { :; }
+        log_warning() { :; }
         bootstrap_win_env_if_needed
     fi
 fi

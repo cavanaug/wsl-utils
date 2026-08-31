@@ -146,3 +146,17 @@ EOF
     [[ "$output" =~ "mirrored" ]]
     [[ "$output" =~ "1.0.73.2" ]]
 }
+
+@test "bootstrap does not log [INFO] to stdout when WIN_USERPROFILE unset" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_DISTRO=1
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    unset WIN_USERPROFILE WIN_LOCALAPPDATA WIN_APPDATA
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"[INFO]"* ]]
+    [[ "$output" != *"Bootstrapping"* ]]
+}
