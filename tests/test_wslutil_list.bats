@@ -63,3 +63,104 @@ EOF
     run wslutil_list_hostname_configured_value "mybox" ""
     [ -z "$output" ]
 }
+
+make_list_fakebin() {
+    FAKEBIN="$TEST_TEMP_DIR/fakebin"
+    mkdir -p "$FAKEBIN"
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+printf '%s\n' "$*" >>"${WSLUTIL_LIST_WSL_LOG:-/tmp/wsl-argv.log}"
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+    cat <<'LST'
+  NAME      STATE           VERSION
+* Ubuntu    Running         2
+  debian    Stopped         2
+  alpine    Running         2
+LST
+    exit 0
+fi
+echo "unexpected: $*" >&2
+exit 1
+EOF
+    chmod +x "$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WIN_UTF8="cat"
+    export WSLUTIL_LIST_WSL_LOG="$TEST_TEMP_DIR/wsl-argv.log"
+    : >"$WSLUTIL_LIST_WSL_LOG"
+}
+
+seed_file_root() {
+    export WSLUTIL_LIST_FILE_ROOT="$TEST_TEMP_DIR/fs"
+    mkdir -p "$WSLUTIL_LIST_FILE_ROOT/Ubuntu/etc" \
+        "$WSLUTIL_LIST_FILE_ROOT/Ubuntu/proc/sys/kernel" \
+        "$WSLUTIL_LIST_FILE_ROOT/alpine/etc" \
+        "$WSLUTIL_LIST_FILE_ROOT/alpine/proc/sys/kernel"
+    printf 'PRETTY_NAME="Ubuntu 24.04.2 LTS"\n' >"$WSLUTIL_LIST_FILE_ROOT/Ubuntu/etc/os-release"
+    printf 'mybox\n' >"$WSLUTIL_LIST_FILE_ROOT/Ubuntu/proc/sys/kernel/hostname"
+    printf 'PRETTY_NAME="Alpine Linux v3.20"\n' >"$WSLUTIL_LIST_FILE_ROOT/alpine/etc/os-release"
+    printf 'alpine\n' >"$WSLUTIL_LIST_FILE_ROOT/alpine/proc/sys/kernel/hostname"
+    cat >"$WSLUTIL_LIST_FILE_ROOT/alpine/etc/wsl.conf" <<'EOF'
+[network]
+hostname=devbox
+EOF
+}
+
+@test "resolve_file uses FILE_ROOT and current distro slash path" {
+    export WSLUTIL_LIST_FILE_ROOT="$TEST_TEMP_DIR/fs"
+    run wslutil_list_resolve_file Ubuntu etc/os-release
+    [ "$output" = "$TEST_TEMP_DIR/fs/Ubuntu/etc/os-release" ]
+    unset WSLUTIL_LIST_FILE_ROOT
+    export WSL_DISTRO_NAME=Ubuntu
+    run wslutil_list_resolve_file Ubuntu etc/os-release
+    [ "$output" = "/etc/os-release" ]
+}
+
+@test "wslutil-list --help exits 0 and mentions --json and --location" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Usage:" ]]
+    [[ "$output" =~ "--json" ]]
+    [[ "$output" =~ "--location" ]]
+}
+
+@test "wslutil-list unknown flag exits 1" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --bogus
+    [ "$status" -eq 1 ]
+}
+
+@test "human table: running type/hostname, stopped dashes, never -d" {
+    make_list_fakebin
+    seed_file_root
+    command -v crudini >/dev/null 2>&1 || skip "need crudini"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ NAME ]]
+    [[ "$output" =~ Ubuntu ]]
+    [[ "$output" =~ "Ubuntu 24.04.2 LTS" ]]
+    [[ "$output" =~ mybox ]]
+    [[ "$output" =~ debian ]]
+    [[ "$output" =~ alpine ]]
+    [[ "$output" =~ "Alpine Linux v3.20" ]]
+    [[ "$output" =~ "alpine (devbox)" ]]
+    [[ "$output" != *LOCATION* ]]
+    if grep -E -- '-d' "$WSLUTIL_LIST_WSL_LOG"; then
+        echo "wsl.exe -d was invoked" >&2
+        cat "$WSLUTIL_LIST_WSL_LOG" >&2
+        return 1
+    fi
+}
+
+@test "empty distro list exits 1" {
+    FAKEBIN="$TEST_TEMP_DIR/emptybin"
+    mkdir -p "$FAKEBIN"
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+echo "  NAME      STATE           VERSION"
+exit 0
+EOF
+    chmod +x "$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WIN_UTF8="cat"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list"
+    [ "$status" -eq 1 ]
+}

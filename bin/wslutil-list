@@ -1,0 +1,64 @@
+#!/usr/bin/bash
+# wslutil-list - Table of registered WSL distros
+set -euo pipefail
+
+_wsu_bin="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_wsu_bin/../lib/wslutil-list.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../lib/wslutil-list.sh"
+elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-list.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_wsu_bin/../share/wslutil/lib/wslutil-list.sh"
+else
+    echo "wslutil-list: lib not found" >&2
+    exit 1
+fi
+
+show_help() {
+    cat <<EOF
+Usage: wslutil-list [--json] [--location]
+
+Table of all registered WSL distros (read-only; never starts a distro).
+
+Options:
+  --json       Machine-readable JSON on stdout
+  --location   Include Windows BasePath folder
+  --help       Show this help and exit
+EOF
+}
+
+LIST_WANT_JSON=0
+LIST_WANT_LOCATION=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+    --help)
+        show_help
+        exit 0
+        ;;
+    --json)
+        LIST_WANT_JSON=1
+        shift
+        ;;
+    --location)
+        LIST_WANT_LOCATION=1
+        shift
+        ;;
+    *)
+        echo "wslutil-list: unknown option: $1" >&2
+        show_help >&2
+        exit 1
+        ;;
+    esac
+done
+
+if [[ "$LIST_WANT_JSON" -eq 1 ]] && ! command -v yq >/dev/null 2>&1; then
+    echo "wslutil-list: --json requires yq" >&2
+    exit 1
+fi
+
+wslutil_list_collect
+if [[ "$LIST_WANT_JSON" -eq 1 ]]; then
+    wslutil_list_print_json
+else
+    wslutil_list_print_human
+fi
