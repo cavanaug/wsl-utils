@@ -25,6 +25,8 @@ teardown() {
     [ -f "$PREFIX/share/wslutil/lib/wslutil-exes-config.sh" ]
     [ -x "$PREFIX/bin/wslutil-info" ]
     [ -f "$PREFIX/share/wslutil/lib/wslutil-info.sh" ]
+    [ -x "$PREFIX/bin/wslutil-list" ]
+    [ -f "$PREFIX/share/wslutil/lib/wslutil-list.sh" ]
     [ -f "$PREFIX/share/wslutil/VERSION" ]
     [ -L "$PREFIX/bin/wslview" ] || [ -f "$PREFIX/bin/wslview" ]
 }

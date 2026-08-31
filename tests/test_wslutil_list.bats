@@ -274,3 +274,15 @@ EOF
     [[ "$output" =~ LOCATION ]]
     [[ "$output" =~ Ubuntu ]]
 }
+
+@test "wslutil list --help dispatches" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil" list --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "--json" ]]
+}
+
+@test "wslutil --help lists list as a core subcommand" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ list ]]
+}
