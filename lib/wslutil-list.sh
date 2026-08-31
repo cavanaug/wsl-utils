@@ -246,7 +246,7 @@ wslutil_list_print_json() {
                 "name": strenv(_ln),
                 "default": (strenv(_ld) == "yes"),
                 "state": strenv(_ls),
-                "wslVersion": (strenv(_lv) | select(. == "1" or . == "2") | tonumber // null),
+                "wslVersion": (strenv(_lv) | (select(. == "1" or . == "2") | tonumber) // null),
                 "type": (strenv(_lt) | select(length > 0) // null),
                 "hostname": (strenv(_lh) | select(length > 0) // null),
                 "hostnameConfigured": (strenv(_lc) | select(length > 0) // null),
@@ -257,7 +257,7 @@ wslutil_list_print_json() {
                 "name": strenv(_ln),
                 "default": (strenv(_ld) == "yes"),
                 "state": strenv(_ls),
-                "wslVersion": (strenv(_lv) | select(. == "1" or . == "2") | tonumber // null),
+                "wslVersion": (strenv(_lv) | (select(. == "1" or . == "2") | tonumber) // null),
                 "type": (strenv(_lt) | select(length > 0) // null),
                 "hostname": (strenv(_lh) | select(length > 0) // null),
                 "hostnameConfigured": (strenv(_lc) | select(length > 0) // null)

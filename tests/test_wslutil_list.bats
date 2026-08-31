@@ -187,6 +187,32 @@ EOF
     [ "$(echo "$output" | yq eval '.[2].hostnameConfigured' -)" = "devbox" ]
 }
 
+@test "--json keeps object keys when wslVersion is not 1 or 2" {
+    FAKEBIN="$TEST_TEMP_DIR/fakebin"
+    mkdir -p "$FAKEBIN"
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+    cat <<'LST'
+  NAME      STATE           VERSION
+* WeirdDistro    Stopped         weird
+LST
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_LIST_WIN_UTF8="cat"
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.[0].name' -)" = "WeirdDistro" ]
+    [ "$(echo "$output" | yq eval '.[0].wslVersion' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.[0].state' -)" = "Stopped" ]
+    [ "$(echo "$output" | yq eval '.[0].default' -)" = "true" ]
+}
+
 @test "--json without yq exits 1" {
     make_list_fakebin
     seed_file_root
