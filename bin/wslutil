@@ -72,7 +72,7 @@ upgrade_command() {
 
 # Parse CLI arguments and dispatch to subcommands
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $(basename "$0") [options] {doctor|shellenv|setup|upgrade}"
+    echo "Usage: $(basename "$0") [options] {doctor|info|shellenv|setup|upgrade}"
     exit 1
 fi
 case "$1" in
@@ -98,10 +98,11 @@ upgrade)
     echo "Usage: $(basename $0) <subcommand> [options]"
     echo "Subcommands:"
     echo "  doctor     Run a health check on the wslutil environment"
+    echo "  info       Show WSL host and distro facts (read-only)"
     echo "  shellenv   Setup the shell environment (eval the output)"
     echo "  setup      exes|windows|linux — configure shims and WSL settings (linux: sudo wslutil-setup-linux)"
     echo "  upgrade    Upgrade the wslutil in place"
-    if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|shellenv|setup|upgrade)')"; then
+    if extras="$(compgen -c | grep '^wslutil-' | cut -f2 -d- | grep -E -v '(doctor|info|shellenv|setup|upgrade)')"; then
         printf "\nExtra Subcommands:\n"
         for i in $extras; do
             echo "  $i (as wslutil-$i)"
@@ -159,7 +160,7 @@ upgrade)
         exit $?
     else
         # Command not found in either location
-        echo "Usage: $(basename $0) [options] {doctor|shellenv|setup|upgrade}"
+        echo "Usage: $(basename $0) [options] {doctor|info|shellenv|setup|upgrade}"
         exit 1
     fi
     ;;

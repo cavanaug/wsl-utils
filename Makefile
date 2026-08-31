@@ -5,7 +5,7 @@ BINDIR      := $(DESTDIR)$(PREFIX)/bin
 DATADIR     := $(DESTDIR)$(PREFIX)/share/wslutil
 
 CORE_SCRIPTS := \
-	wslutil wslutil-config wslutil-doctor wslutil-setup wslutil-setup-linux wslutil-uptime \
+	wslutil wslutil-config wslutil-doctor wslutil-info wslutil-setup wslutil-setup-linux wslutil-uptime \
 	win-run win-open win-browser win-copy win-paste win-utf8 win-env \
 	wslpath-drive
 
@@ -22,6 +22,7 @@ install:
 	install -m 0644 lib/wslutil-paths.sh $(DATADIR)/lib/wslutil-paths.sh
 	install -m 0644 lib/wslutil-setup-common.sh $(DATADIR)/lib/wslutil-setup-common.sh
 	install -m 0644 lib/wslutil-exes-config.sh $(DATADIR)/lib/wslutil-exes-config.sh
+	install -m 0644 lib/wslutil-info.sh $(DATADIR)/lib/wslutil-info.sh
 	install -m 0644 VERSION $(DATADIR)/VERSION
 
 uninstall:

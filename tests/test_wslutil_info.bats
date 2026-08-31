@@ -43,3 +43,22 @@ teardown() {
     run wslutil_info_should_omit wslconf interop appendWindowsPath false
     [ "$status" -eq 1 ]
 }
+
+@test "wslutil-info --help exits 0 and mentions --json and --distro" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Usage:" ]]
+    [[ "$output" =~ "--json" ]]
+    [[ "$output" =~ "--distro" ]]
+}
+
+@test "wslutil-info unknown flag exits 1" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --bogus
+    [ "$status" -eq 1 ]
+}
+
+@test "wslutil info --help dispatches" {
+    run "$BATS_TEST_DIRNAME/../bin/wslutil" info --help
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "--json" ]]
+}
