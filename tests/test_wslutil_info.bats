@@ -5,7 +5,7 @@ load test_helpers
 setup() {
     setup_test_env
     # shellcheck source=/dev/null
-    source "$BATS_TEST_DIRNAME/../lib/wslutil-info.sh"
+    source "$BATS_TEST_DIRNAME/../bin/wslutil-info"
 }
 
 teardown() {
@@ -140,6 +140,7 @@ EOF
     [[ "$output" != *"guiApplications"* ]]
     [[ "$output" =~ "configured:" ]]
     [[ "$output" =~ "mirrored" ]]
+    [[ "$output" != *$'\n'"  wsl:"* ]]
 }
 
 @test "human report prints wslinfo version and networkingMode" {
@@ -204,8 +205,7 @@ EOF
     run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ext4.vhdx" ]]
-    [[ "$output" =~ "vhd (wsl):" ]]
-    [[ "$output" =~ "/mnt/c/" ]]
+    [[ "$output" != *"vhd (wsl):"* ]]
     [[ "$output" =~ "Ubuntu" ]]
     [[ "$output" =~ "Running" ]]
 }
@@ -307,6 +307,110 @@ EOF
     echo "$output" | yq eval '.distro.name' - | grep -q 'Ubuntu'
 }
 
+@test "lxss_lookup does not require powershell.exe on PATH" {
+    local ps="$TEST_TEMP_DIR/fake-powershell"
+    cat >"$ps" <<'EOF'
+#!/bin/bash
+printf 'debian-13\tC:\\Users\\foo\\WSL2\\debian-13\t2\t0\r\n'
+EOF
+    chmod +x "$ps"
+    export WSLUTIL_INFO_POWERSHELL="$ps"
+    unset WSLUTIL_INFO_LXSS
+    export PATH="/usr/bin:/bin"
+    run wslutil_info_lxss_lookup debian-13
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"C:\\Users\\foo\\WSL2\\debian-13"* ]]
+    [[ "$output" == *$'\t'"2"$'\t'"0" ]]
+}
+
+@test "collect_versions uses win-run wsl.exe when WSLUTIL_INFO_WSL unset" {
+    local wr="$TEST_TEMP_DIR/fake-win-run"
+    cat >"$wr" <<EOF
+#!/bin/bash
+echo "\$*" >>"$TEST_TEMP_DIR/win-run.args"
+if [[ "\$1" == "wsl.exe" && "\$2" == "--version" ]]; then
+    cat <<'VER'
+WSL version: 2.7.12.0
+Kernel version: 6.18.33.2-2
+WSLg version: 1.0.73.2
+MSRDC version: 1.2.7214
+Direct3D version: 1.611.1-81528511
+DXCore version: 10.0.26100.1-240331-1435.ge-release
+Windows version: 10.0.26200.9106
+VER
+    exit 0
+fi
+echo "unexpected: \$*" >&2
+exit 1
+EOF
+    chmod +x "$wr"
+    export WSLUTIL_INFO_WIN_RUN="$wr"
+    unset WSLUTIL_INFO_WSL
+    export PATH="/usr/bin:/bin"
+    wslutil_info_collect_versions
+    [ "$INFO_VER_WSL_EXE" = "2.7.12.0" ]
+    grep -q 'wsl.exe --version' "$TEST_TEMP_DIR/win-run.args"
+}
+
+@test "format_uptime pretty matches wslutil-uptime" {
+    [ "$(wslutil_info_format_uptime 90)" = "up 1 minutes" ]
+    [ "$(wslutil_info_format_uptime 3661)" = "up 1:01" ]
+    [ "$(wslutil_info_format_uptime 90061)" = "up 1 day, 1:01" ]
+}
+
+@test "human report has host VM uptime, distro uptime, blank line, Windows paths only" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    export WSLUTIL_INFO_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Ubuntu\tC:\\Users\\foo\\LocalState\t2\t1000\n' >"$WSLUTIL_INFO_LXSS"
+    export WSLUTIL_INFO_VM_UPTIME_SECS=90061
+    export WSLUTIL_INFO_DISTRO_UPTIME="up 3:12"
+    export WSLUTIL_INFO_COLOR=0
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "uptime:" ]]
+    [[ "$output" =~ "up 1 day, 1:01" ]]
+    [[ "$output" =~ "up 3:12" ]]
+    [[ "$output" =~ $'\n\n== Distro:' ]]
+    [[ "$output" != *"vhd (wsl):"* ]]
+}
+
+@test "stopped other distro omits distro uptime from wslutil-uptime" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    export WSLUTIL_INFO_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Debian\tC:\\wsldisks\\Debian\t2\t1000\nUbuntu\tC:\\u\t2\t1000\n' >"$WSLUTIL_INFO_LXSS"
+    export WSLUTIL_INFO_VM_UPTIME_SECS=60
+    export WSLUTIL_INFO_DISTRO_UPTIME="should-not-appear"
+    export WSLUTIL_INFO_COLOR=0
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --distro Debian
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"should-not-appear"* ]]
+    [[ "$output" =~ "uptime:" ]]
+}
+
+@test "color headers when WSLUTIL_INFO_COLOR=1" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSLUTIL_INFO_SKIP_DISTRO=1
+    export WSLUTIL_INFO_VM_UPTIME_SECS=60
+    export WSLUTIL_INFO_COLOR=1
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033['* ]]
+}
+
 @test "live wslutil info --json parses" {
     skip_if_not_wsl
     command -v yq >/dev/null 2>&1 || skip "need yq"
@@ -314,6 +418,7 @@ EOF
     [ "$status" -eq 0 ]
     echo "$output" | yq eval '.host' - >/dev/null
     echo "$output" | yq eval '.distro' - >/dev/null
+    echo "$output" | yq eval '.distro.vhd.windowsPath' - | grep -qv '^null$'
 }
 
 @test "bootstrap does not log [INFO] to stdout when WIN_USERPROFILE unset" {

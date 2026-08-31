@@ -22,8 +22,6 @@ install:
 	install -m 0644 lib/wslutil-paths.sh $(DATADIR)/lib/wslutil-paths.sh
 	install -m 0644 lib/wslutil-setup-common.sh $(DATADIR)/lib/wslutil-setup-common.sh
 	install -m 0644 lib/wslutil-exes-config.sh $(DATADIR)/lib/wslutil-exes-config.sh
-	install -m 0644 lib/wslutil-info.sh $(DATADIR)/lib/wslutil-info.sh
-	install -m 0644 lib/wslutil-list.sh $(DATADIR)/lib/wslutil-list.sh
 	install -m 0644 VERSION $(DATADIR)/VERSION
 
 uninstall:

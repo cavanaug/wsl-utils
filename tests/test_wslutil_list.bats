@@ -5,7 +5,7 @@ load test_helpers
 setup() {
     setup_test_env
     # shellcheck source=/dev/null
-    source "$BATS_TEST_DIRNAME/../lib/wslutil-list.sh"
+    source "$BATS_TEST_DIRNAME/../bin/wslutil-list"
 }
 
 teardown() {
@@ -113,6 +113,32 @@ EOF
     export WSL_DISTRO_NAME=Ubuntu
     run wslutil_list_resolve_file Ubuntu etc/os-release
     [ "$output" = "/etc/os-release" ]
+}
+
+@test "cmd_powershell falls back to WIN_WINDIR when powershell.exe is not on PATH" {
+    unset WSLUTIL_LIST_POWERSHELL
+    export PATH="/usr/bin:/bin"
+    export WIN_WINDIR="/mnt/c/Windows"
+    run wslutil_list_cmd_powershell
+    [ "$status" -eq 0 ]
+    [ "$output" = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" ]
+}
+
+@test "other distro file candidates include /mnt/wsl" {
+    export WSLUTIL_LIST_WSLPATH="$TEST_TEMP_DIR/no-wslpath"
+    run wslutil_list_other_file_candidates devbox-v130 etc/os-release
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"/mnt/wsl.localhost/devbox-v130/etc/os-release"* ]]
+    [[ "$output" == *"/mnt/wsl/devbox-v130/etc/os-release"* ]]
+}
+
+@test "live_hostname falls back to etc/hostname when proc is missing" {
+    export WSLUTIL_LIST_FILE_ROOT="$TEST_TEMP_DIR/fs"
+    mkdir -p "$WSLUTIL_LIST_FILE_ROOT/other/etc"
+    printf 'devbox-v130\n' >"$WSLUTIL_LIST_FILE_ROOT/other/etc/hostname"
+    run wslutil_list_live_hostname other
+    [ "$status" -eq 0 ]
+    [ "$output" = "devbox-v130" ]
 }
 
 @test "wslutil-list --help exits 0 and mentions --json and --location" {
