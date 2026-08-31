@@ -90,6 +90,15 @@ Windows version: 10.0.26200.9106
 VER
     exit 0
 fi
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+    cat <<'LST'
+  NAME      STATE           VERSION
+* Ubuntu    Running         2
+  Debian    Stopped         2
+LST
+    exit 0
+fi
+echo "unexpected: $*" >&2
 exit 1
 EOF
     chmod +x "$FAKEBIN/wslinfo" "$FAKEBIN/wsl.exe"
@@ -145,6 +154,49 @@ EOF
     [[ "$output" =~ "2.7.12.0" ]]
     [[ "$output" =~ "mirrored" ]]
     [[ "$output" =~ "1.0.73.2" ]]
+}
+
+@test "unknown --distro exits 1 and lists names" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --distro NoSuchDistro
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Ubuntu" ]]
+}
+
+@test "distro block includes VHD path from Lxss TSV" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    export WSLUTIL_INFO_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Ubuntu\tC:\\Users\\foo\\AppData\\Local\\Packages\\Ubuntu\\LocalState\t2\t1000\n' >"$WSLUTIL_INFO_LXSS"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "ext4.vhdx" ]]
+    [[ "$output" =~ "Ubuntu" ]]
+    [[ "$output" =~ "Running" ]]
+}
+
+@test "stopped other distro does not call wsl.exe -d" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    export WSLUTIL_INFO_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Debian\tC:\\wsldisks\\Debian\t2\t1000\nUbuntu\tC:\\u\t2\t1000\n' >"$WSLUTIL_INFO_LXSS"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --distro Debian
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "distro not running" ]]
+    [[ "$output" != *"-d Debian"* ]]
 }
 
 @test "bootstrap does not log [INFO] to stdout when WIN_USERPROFILE unset" {

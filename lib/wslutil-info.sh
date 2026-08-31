@@ -275,3 +275,103 @@ wslutil_info_print_human_wslg() {
         printf '    %s = %s\n' "$key" "$value"
     done <<<"$lines"
 }
+
+wslutil_info_list_distros() {
+    local ws u8 raw
+    ws="$(wslutil_info_cmd_wsl)"
+    u8="$(wslutil_info_cmd_win_utf8)"
+    raw="$("$ws" -l -v 2>/dev/null | "$u8" 2>/dev/null || true)"
+    printf '%s\n' "$raw" | awk '
+        BEGIN { IGNORECASE=1 }
+        NR==1 && /NAME/ { next }
+        {
+            def="no"
+            if ($1=="*") { def="yes"; $1="" ; sub(/^ +/, "") }
+            name=$1; state=$(NF-1); ver=$NF
+            print name "\t" state "\t" ver "\t" def
+        }'
+}
+
+wslutil_info_lxss_lookup() {
+    local want="$1" line n b v u
+    if [[ -n "${WSLUTIL_INFO_LXSS:-}" && -f "$WSLUTIL_INFO_LXSS" ]]; then
+        while IFS=$'\t' read -r n b v u; do
+            if [[ "$n" == "$want" ]]; then
+                b="${b#\\\\?\\}"
+                printf '%s\t%s\t%s\n' "$b" "$v" "$u"
+                return 0
+            fi
+        done <"$WSLUTIL_INFO_LXSS"
+        return 1
+    fi
+    local ps out
+    ps="$(command -v powershell.exe 2>/dev/null || true)"
+    [[ -n "$ps" ]] || return 1
+    out="$("$ps" -NoProfile -Command "Get-ChildItem HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss | ForEach-Object { \$n = \$_.GetValue('DistributionName'); if (\$n) { \$n + [char]9 + \$_.GetValue('BasePath') + [char]9 + \$_.GetValue('Version') + [char]9 + \$_.GetValue('DefaultUid') } }" 2>/dev/null | "$(wslutil_info_cmd_win_utf8)" || true)"
+    while IFS=$'\t' read -r n b v u; do
+        if [[ "$n" == "$want" ]]; then
+            b="${b#\\\\?\\}"
+            printf '%s\t%s\t%s\n' "$b" "$v" "$u"
+            return 0
+        fi
+    done <<<"$out"
+    return 1
+}
+
+wslutil_info_resolve_distro() {
+    local want="${1:-${WSL_DISTRO_NAME:-}}"
+    [[ -n "$want" ]] || return 1
+    local row dname
+    while IFS= read -r row; do
+        [[ -n "$row" ]] || continue
+        IFS=$'\t' read -r dname _rest <<<"$row"
+        if [[ "$dname" == "$want" ]]; then
+            printf '%s\n' "$row"
+            return 0
+        fi
+    done < <(wslutil_info_list_distros)
+    return 1
+}
+
+wslutil_info_print_human_distro() {
+    local name="$1" state="$2" ver="$3" def="$4"
+    local cur=""
+    [[ "$name" == "${WSL_DISTRO_NAME:-}" ]] && cur=" (current)"
+    local base uid lxver vhd_win vhd_wsl lx
+    base=""
+    uid=""
+    lxver=""
+    if lx="$(wslutil_info_lxss_lookup "$name")"; then
+        IFS=$'\t' read -r base lxver uid <<<"$lx"
+    fi
+    vhd_win=""
+    vhd_wsl=""
+    if [[ -n "$base" ]]; then
+        vhd_win="${base}\\ext4.vhdx"
+        vhd_wsl="$(wslpath -u "$vhd_win" 2>/dev/null || true)"
+    fi
+    printf '== Distro: %s%s ==\n' "$name" "$cur"
+    printf '  state:      %s\n' "$state"
+    printf '  wsl:        %s\n' "$ver"
+    printf '  default:    %s\n' "$def"
+    printf '  vhd:        %s\n' "$(wslutil_info_or_unavail "$vhd_win")"
+    printf '  defaultUid: %s\n' "$(wslutil_info_or_unavail "$uid")"
+
+    local confpath="" reason=""
+    if [[ "$name" == "${WSL_DISTRO_NAME:-}" ]]; then
+        confpath="/etc/wsl.conf"
+        wslutil_info_print_human_ini_block "wsl.conf" "$confpath" "$confpath" wslconf "$confpath"
+        return 0
+    fi
+    if [[ "${state,,}" == "running" ]]; then
+        confpath="$(wslpath -u "\\\\wsl.localhost\\${name}\\etc\\wsl.conf" 2>/dev/null || true)"
+        if [[ -n "$confpath" && -r "$confpath" ]]; then
+            wslutil_info_print_human_ini_block "wsl.conf" "$confpath" "$confpath" wslconf "$confpath"
+            return 0
+        fi
+        reason="unreadable"
+    else
+        reason="distro not running"
+    fi
+    printf '  wsl.conf:   unavailable (%s)\n' "$reason"
+}
