@@ -95,6 +95,44 @@ EOF
     chmod +x "$FAKEBIN/wslinfo" "$FAKEBIN/wsl.exe"
 }
 
+@test "filter_ini_file omits default guiApplications and keeps false" {
+    command -v crudini >/dev/null 2>&1 || skip "need crudini"
+    local f="$TEST_TEMP_DIR/.wslconfig"
+    cat >"$f" <<'EOF'
+[wsl2]
+guiApplications=true
+memory=4GB
+EOF
+    run wslutil_info_filter_ini_file wslconfig "$f"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"guiApplications"* ]]
+    [[ "$output" =~ "memory" ]]
+    [[ "$output" =~ "4GB" ]]
+}
+
+@test "human report shows .wslconfig path and non-default memory" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_DISTRO=1
+    export WIN_USERPROFILE="$TEST_TEMP_DIR/winhome"
+    mkdir -p "$WIN_USERPROFILE"
+    cat >"$WIN_USERPROFILE/.wslconfig" <<'EOF'
+[wsl2]
+networkingMode=mirrored
+memory=4GB
+guiApplications=true
+EOF
+    command -v crudini >/dev/null 2>&1 || skip "need crudini"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4GB" ]]
+    [[ "$output" != *"guiApplications"* ]]
+    [[ "$output" =~ "configured:" ]]
+    [[ "$output" =~ "mirrored" ]]
+}
+
 @test "human report prints wslinfo version and networkingMode" {
     make_fakebin
     export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"

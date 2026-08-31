@@ -18,6 +18,19 @@ else
     exit 1
 fi
 
+if [[ -z "${WIN_USERPROFILE:-}" && "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    if [[ -f "$_wsu_bin/../lib/wslutil-setup-common.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$_wsu_bin/../lib/wslutil-setup-common.sh"
+    elif [[ -f "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh" ]]; then
+        # shellcheck source=/dev/null
+        source "$_wsu_bin/../share/wslutil/lib/wslutil-setup-common.sh"
+    fi
+    if declare -F bootstrap_win_env_if_needed >/dev/null 2>&1; then
+        bootstrap_win_env_if_needed
+    fi
+fi
+
 show_help() {
     cat <<EOF
 Usage: wslutil-info [--json] [--distro NAME]
@@ -72,7 +85,10 @@ fi
 
 wslutil_info_collect_versions
 wslutil_info_collect_runtime
-# INFO_RT_NET_CFG filled in Task 4; until then leave unset → "unset (default nat)"
+INFO_RT_NET_CFG=""
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 && -n "${WIN_USERPROFILE:-}" && -f "$WIN_USERPROFILE/.wslconfig" ]] && command -v crudini >/dev/null 2>&1; then
+    INFO_RT_NET_CFG="$(crudini --get "$WIN_USERPROFILE/.wslconfig" wsl2 networkingMode 2>/dev/null || true)"
+fi
 
 if [[ "$JSON" -eq 1 ]]; then
     echo "wslutil-info: --json not implemented" >&2
@@ -82,7 +98,16 @@ fi
 wslutil_info_print_human_host_versions
 wslutil_info_print_human_runtime
 if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
-    : # Task 4
+    local_wslc="${WIN_USERPROFILE:-}/.wslconfig"
+    local_wslg="${WIN_USERPROFILE:-}/.wslgconfig"
+    win_wslc="unavailable"
+    win_wslg="unavailable"
+    if [[ -n "${WIN_USERPROFILE:-}" ]]; then
+        win_wslc="$(wslpath -w "$local_wslc" 2>/dev/null || echo "$local_wslc")"
+        win_wslg="$(wslpath -w "$local_wslg" 2>/dev/null || echo "$local_wslg")"
+    fi
+    wslutil_info_print_human_ini_block ".wslconfig" "$win_wslc" "$local_wslc" wslconfig "$local_wslc"
+    wslutil_info_print_human_wslg "$win_wslg" "$local_wslg" "$local_wslg"
 fi
 if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
     : # Task 5

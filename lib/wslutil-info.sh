@@ -181,3 +181,97 @@ wslutil_info_print_human_runtime() {
     printf '  vmId:            %s\n' "$(wslutil_info_or_unavail "${INFO_RT_VMID:-}")"
     printf '  msalProxyPath:   %s\n' "$(wslutil_info_or_unavail "${INFO_RT_MSAL:-}")"
 }
+
+wslutil_info_filter_ini_file() {
+    local kind="$1" path="$2"
+    [[ -f "$path" ]] || return 0
+    command -v crudini >/dev/null 2>&1 || return 0
+    local section key value def
+    while IFS= read -r section; do
+        [[ -n "$section" ]] || continue
+        while IFS= read -r key; do
+            [[ -n "$key" ]] || continue
+            value="$(crudini --get "$path" "$section" "$key" 2>/dev/null || true)"
+            if wslutil_info_should_omit "$kind" "$section" "$key" "$value"; then
+                continue
+            fi
+            def="$(wslutil_info_documented_default "$kind" "$section" "$key" 2>/dev/null || echo "")"
+            printf '%s\t%s\t%s\t%s\n' "$section" "$key" "$value" "$def"
+        done < <(crudini --get "$path" "$section" 2>/dev/null || true)
+    done < <(crudini --get "$path" 2>/dev/null || true)
+}
+
+wslutil_info_filter_wslgconfig() {
+    local path="$1"
+    [[ -f "$path" ]] || return 0
+    command -v crudini >/dev/null 2>&1 || return 0
+    local key value
+    while IFS= read -r key; do
+        [[ -n "$key" ]] || continue
+        value="$(crudini --get "$path" "system-distro-env" "$key" 2>/dev/null || true)"
+        printf 'system-distro-env\t%s\t%s\n' "$key" "$value"
+    done < <(crudini --get "$path" "system-distro-env" 2>/dev/null || true)
+}
+
+wslutil_info_print_human_ini_block() {
+    local title="$1" winpath="$2" wslpath="$3" kind="$4" path="$5"
+    printf '%s\n' "$title"
+    printf '  windows: %s\n' "$winpath"
+    printf '  wsl:     %s\n' "$wslpath"
+    if [[ ! -e "$path" ]]; then
+        printf '  exists:  no\n'
+        printf '  (all defaults)\n'
+        return 0
+    fi
+    printf '  exists:  yes\n'
+    if ! command -v crudini >/dev/null 2>&1; then
+        printf '  unavailable (need crudini)\n'
+        return 0
+    fi
+    local lines
+    lines="$(wslutil_info_filter_ini_file "$kind" "$path")"
+    if [[ -z "$lines" ]]; then
+        printf '  (all defaults)\n'
+        return 0
+    fi
+    local lastsec="" section key value def
+    while IFS=$'\t' read -r section key value def; do
+        if [[ "$section" != "$lastsec" ]]; then
+            printf '  [%s]\n' "$section"
+            lastsec="$section"
+        fi
+        if [[ -n "$def" ]]; then
+            printf '    %s = %s  (default: %s)\n' "$key" "$value" "$def"
+        else
+            printf '    %s = %s\n' "$key" "$value"
+        fi
+    done <<<"$lines"
+}
+
+wslutil_info_print_human_wslg() {
+    local winpath="$1" wslpath="$2" path="$3"
+    printf '.wslgconfig\n'
+    printf '  windows: %s\n' "$winpath"
+    printf '  wsl:     %s\n' "$wslpath"
+    if [[ ! -e "$path" ]]; then
+        printf '  exists:  no\n'
+        printf '  (all defaults)\n'
+        return 0
+    fi
+    printf '  exists:  yes\n'
+    if ! command -v crudini >/dev/null 2>&1; then
+        printf '  unavailable (need crudini)\n'
+        return 0
+    fi
+    local lines
+    lines="$(wslutil_info_filter_wslgconfig "$path")"
+    if [[ -z "$lines" ]]; then
+        printf '  (all defaults)\n'
+        return 0
+    fi
+    printf '  [system-distro-env]\n'
+    local _s key value
+    while IFS=$'\t' read -r _s key value; do
+        printf '    %s = %s\n' "$key" "$value"
+    done <<<"$lines"
+}
