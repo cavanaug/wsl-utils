@@ -190,9 +190,12 @@ EOF
 @test "--json without yq exits 1" {
     make_list_fakebin
     seed_file_root
-    local hide="$TEST_TEMP_DIR/hide"
-    mkdir -p "$hide"
-    run env PATH="$hide:$FAKEBIN:/bin:/usr/bin" WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe" \
+    local priv="$TEST_TEMP_DIR/privbin" cmd
+    mkdir -p "$priv"
+    for cmd in bash cat awk grep mktemp rm dirname; do
+        ln -sf "$(command -v "$cmd")" "$priv/$cmd"
+    done
+    run env PATH="$priv:$FAKEBIN" WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe" \
         WSLUTIL_LIST_WIN_UTF8="cat" WSLUTIL_LIST_FILE_ROOT="$WSLUTIL_LIST_FILE_ROOT" \
         "$BATS_TEST_DIRNAME/../bin/wslutil-list" --json
     [ "$status" -eq 1 ]
