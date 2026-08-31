@@ -79,7 +79,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Task 3 fills in collection + print. Until then, --json without yq still errors.
 if [[ "$JSON" -eq 1 ]] && ! command -v yq >/dev/null 2>&1; then
     echo "wslutil-info: --json requires yq" >&2
     exit 1
@@ -92,38 +91,21 @@ if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 && -n "${WIN_USERPROFILE:-}" && -f "
     INFO_RT_NET_CFG="$(crudini --get "$WIN_USERPROFILE/.wslconfig" wsl2 networkingMode 2>/dev/null || true)"
 fi
 
-if [[ "$JSON" -eq 1 ]]; then
-    echo "wslutil-info: --json not implemented" >&2
-    exit 1
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    wslutil_info_collect_host_config
 fi
 
-wslutil_info_print_human_host_versions
-wslutil_info_print_human_runtime
-if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
-    if [[ -n "${WIN_USERPROFILE:-}" ]]; then
-        local_wslc="$WIN_USERPROFILE/.wslconfig"
-        local_wslg="$WIN_USERPROFILE/.wslgconfig"
-        win_wslc="$(wslpath -w "$local_wslc" 2>/dev/null || echo "$local_wslc")"
-        win_wslg="$(wslpath -w "$local_wslg" 2>/dev/null || echo "$local_wslg")"
-    else
-        local_wslc="unavailable"
-        local_wslg="unavailable"
-        win_wslc="unavailable"
-        win_wslg="unavailable"
-    fi
-    wslutil_info_print_human_ini_block ".wslconfig" "$win_wslc" "$local_wslc" wslconfig "$local_wslc"
-    wslutil_info_print_human_wslg "$win_wslg" "$local_wslg" "$local_wslg"
-fi
+DISTRO_UNAVAILABLE=""
 if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
     wslutil_info_collect_distro_list
     target="${DISTRO:-${WSL_DISTRO_NAME:-}}"
     if [[ -z "$target" ]]; then
-        printf '== Distro ==\n  unavailable (WSL_DISTRO_NAME unset)\n'
+        DISTRO_UNAVAILABLE="WSL_DISTRO_NAME unset"
     elif [[ "$INFO_DISTRO_LIST_OK" -eq 0 ]]; then
-        printf '== Distro ==\n  unavailable (could not list distros)\n'
+        DISTRO_UNAVAILABLE="could not list distros"
     elif row="$(wslutil_info_resolve_distro "$target")"; then
         IFS=$'\t' read -r dname dstate dver ddef <<<"$row"
-        wslutil_info_print_human_distro "$dname" "$dstate" "$dver" "$ddef"
+        wslutil_info_collect_distro_fields "$dname" "$dstate" "$dver" "$ddef"
     else
         echo "wslutil-info: unknown distro: $target" >&2
         echo "Available:" >&2
@@ -132,6 +114,25 @@ if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
             echo "  $dname" >&2
         done
         exit 1
+    fi
+fi
+
+if [[ "$JSON" -eq 1 ]]; then
+    wslutil_info_emit_json
+    exit 0
+fi
+
+wslutil_info_print_human_host_versions
+wslutil_info_print_human_runtime
+if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
+    wslutil_info_print_human_ini_block ".wslconfig" "${INFO_WSLCONFIG_WIN:-unavailable}" "${INFO_WSLCONFIG_WSL:-unavailable}" wslconfig "${INFO_WSLCONFIG_WSL:-unavailable}"
+    wslutil_info_print_human_wslg "${INFO_WSLGCONFIG_WIN:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}"
+fi
+if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
+    if [[ -n "$DISTRO_UNAVAILABLE" ]]; then
+        printf '== Distro ==\n  unavailable (%s)\n' "$DISTRO_UNAVAILABLE"
+    else
+        wslutil_info_print_human_distro "${INFO_DISTRO_NAME}" "${INFO_DISTRO_STATE}" "${INFO_DISTRO_VER}" "$([[ "${INFO_DISTRO_DEFAULT:-0}" == 1 ]] && echo yes || echo no)"
     fi
 fi
 exit 0

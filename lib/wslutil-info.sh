@@ -357,6 +357,207 @@ wslutil_info_resolve_distro() {
     return 1
 }
 
+wslutil_info_collect_host_config() {
+    INFO_WSLCONFIG_WIN=""
+    INFO_WSLCONFIG_WSL=""
+    INFO_WSLCONFIG_EXISTS=0
+    INFO_WSLCONFIG_LINES=""
+    INFO_WSLGCONFIG_WIN=""
+    INFO_WSLGCONFIG_WSL=""
+    INFO_WSLGCONFIG_EXISTS=0
+    INFO_WSLG_LINES=""
+    if [[ -n "${WIN_USERPROFILE:-}" ]]; then
+        INFO_WSLCONFIG_WSL="$WIN_USERPROFILE/.wslconfig"
+        INFO_WSLGCONFIG_WSL="$WIN_USERPROFILE/.wslgconfig"
+        INFO_WSLCONFIG_WIN="$(wslpath -w "$INFO_WSLCONFIG_WSL" 2>/dev/null || echo "$INFO_WSLCONFIG_WSL")"
+        INFO_WSLGCONFIG_WIN="$(wslpath -w "$INFO_WSLGCONFIG_WSL" 2>/dev/null || echo "$INFO_WSLGCONFIG_WSL")"
+    else
+        INFO_WSLCONFIG_WSL="unavailable"
+        INFO_WSLGCONFIG_WSL="unavailable"
+        INFO_WSLCONFIG_WIN="unavailable"
+        INFO_WSLGCONFIG_WIN="unavailable"
+    fi
+    if [[ -e "${INFO_WSLCONFIG_WSL:-}" ]]; then
+        INFO_WSLCONFIG_EXISTS=1
+        INFO_WSLCONFIG_LINES="$(wslutil_info_filter_ini_file wslconfig "$INFO_WSLCONFIG_WSL")"
+    fi
+    if [[ -e "${INFO_WSLGCONFIG_WSL:-}" ]]; then
+        INFO_WSLGCONFIG_EXISTS=1
+        INFO_WSLG_LINES="$(wslutil_info_filter_wslgconfig "$INFO_WSLGCONFIG_WSL")"
+    fi
+}
+
+wslutil_info_collect_distro_fields() {
+    local name="$1" state="$2" ver="$3" def="$4"
+    INFO_DISTRO_NAME="$name"
+    INFO_DISTRO_STATE="$state"
+    INFO_DISTRO_VER="$ver"
+    INFO_DISTRO_DEFAULT=0
+    [[ "$def" == "yes" ]] && INFO_DISTRO_DEFAULT=1
+    INFO_DISTRO_CURRENT=0
+    [[ "$name" == "${WSL_DISTRO_NAME:-}" ]] && INFO_DISTRO_CURRENT=1
+    INFO_DISTRO_VHD_WIN=""
+    INFO_DISTRO_VHD_WSL=""
+    INFO_DISTRO_UID=""
+    local base uid lxver lx
+    if lx="$(wslutil_info_lxss_lookup "$name")"; then
+        IFS=$'\t' read -r base lxver uid <<<"$lx"
+        if [[ -n "$base" ]]; then
+            INFO_DISTRO_VHD_WIN="${base}\\ext4.vhdx"
+            INFO_DISTRO_VHD_WSL="$(wslpath -u "$INFO_DISTRO_VHD_WIN" 2>/dev/null || true)"
+        fi
+        INFO_DISTRO_UID="$uid"
+    fi
+    INFO_WSLCONF_AVAILABLE=0
+    INFO_WSLCONF_PATH=""
+    INFO_WSLCONF_LINES=""
+    INFO_WSLCONF_REASON="unavailable"
+    if [[ "$name" == "${WSL_DISTRO_NAME:-}" ]]; then
+        INFO_WSLCONF_PATH="/etc/wsl.conf"
+        INFO_WSLCONF_AVAILABLE=1
+        if [[ -e "$INFO_WSLCONF_PATH" ]]; then
+            INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+        fi
+    elif [[ "${state,,}" == "running" ]]; then
+        INFO_WSLCONF_PATH="$(wslpath -u "\\\\wsl.localhost\\${name}\\etc\\wsl.conf" 2>/dev/null || true)"
+        if [[ -n "$INFO_WSLCONF_PATH" && -r "$INFO_WSLCONF_PATH" ]]; then
+            INFO_WSLCONF_AVAILABLE=1
+            INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+        else
+            INFO_WSLCONF_REASON="unreadable"
+        fi
+    else
+        INFO_WSLCONF_REASON="distro not running"
+    fi
+}
+
+wslutil_info_yq_str() {
+    if [[ -n "${1:-}" ]]; then
+        printf '%s' "$1"
+    else
+        printf 'null'
+    fi
+}
+
+wslutil_info_emit_json() {
+    local tmp section key value def _s
+    tmp="$(mktemp)"
+    export _YQ_WSL _YQ_WSL_EXE _YQ_KERNEL _YQ_WSLG _YQ_MSRDC _YQ_D3D _YQ_DXCORE _YQ_WIN
+    export _YQ_NET _YQ_NET_CFG _YQ_VMID _YQ_MSAL
+    _YQ_WSL="$(wslutil_info_yq_str "${INFO_VER_WSL:-}")"
+    _YQ_WSL_EXE="$(wslutil_info_yq_str "${INFO_VER_WSL_EXE:-}")"
+    _YQ_KERNEL="$(wslutil_info_yq_str "${INFO_VER_KERNEL:-}")"
+    _YQ_WSLG="$(wslutil_info_yq_str "${INFO_VER_WSLG:-}")"
+    _YQ_MSRDC="$(wslutil_info_yq_str "${INFO_VER_MSRDC:-}")"
+    _YQ_D3D="$(wslutil_info_yq_str "${INFO_VER_D3D:-}")"
+    _YQ_DXCORE="$(wslutil_info_yq_str "${INFO_VER_DXCORE:-}")"
+    _YQ_WIN="$(wslutil_info_yq_str "${INFO_VER_WINDOWS:-}")"
+    _YQ_NET="$(wslutil_info_yq_str "${INFO_RT_NET:-}")"
+    _YQ_NET_CFG="$(wslutil_info_yq_str "${INFO_RT_NET_CFG:-}")"
+    _YQ_VMID="$(wslutil_info_yq_str "${INFO_RT_VMID:-}")"
+    _YQ_MSAL="$(wslutil_info_yq_str "${INFO_RT_MSAL:-}")"
+    local mismatch=false
+    if [[ -n "${INFO_VER_WSL:-}" && -n "${INFO_VER_WSL_EXE:-}" && "${INFO_VER_WSL}" != "${INFO_VER_WSL_EXE}" ]]; then
+        mismatch=true
+    fi
+    yq eval -n \
+        '.host.versions.wsl = (strenv(_YQ_WSL) | select(. != "null") // null) |
+        .host.versions.wslExe = (strenv(_YQ_WSL_EXE) | select(. != "null") // null) |
+        .host.versions.mismatch = '"$mismatch"' |
+        .host.versions.kernel = (strenv(_YQ_KERNEL) | select(. != "null") // null) |
+        .host.versions.wslg = (strenv(_YQ_WSLG) | select(. != "null") // null) |
+        .host.versions.msrdc = (strenv(_YQ_MSRDC) | select(. != "null") // null) |
+        .host.versions.direct3d = (strenv(_YQ_D3D) | select(. != "null") // null) |
+        .host.versions.dxcore = (strenv(_YQ_DXCORE) | select(. != "null") // null) |
+        .host.versions.windows = (strenv(_YQ_WIN) | select(. != "null") // null) |
+        .host.runtime.networkingMode = (strenv(_YQ_NET) | select(. != "null") // null) |
+        .host.runtime.configuredNetworkingMode = (strenv(_YQ_NET_CFG) | select(. != "null") // null) |
+        .host.runtime.vmId = (strenv(_YQ_VMID) | select(. != "null") // null) |
+        .host.runtime.msalProxyPath = (strenv(_YQ_MSAL) | select(. != "null") // null) |
+        .host.wslconfig = {"windowsPath": null, "wslPath": null, "exists": false, "sections": {}} |
+        .host.wslgconfig = {"windowsPath": null, "wslPath": null, "exists": false, "sections": {}} |
+        .distro = {"name": null}' >"$tmp"
+
+    export _YQ_WP _YQ_LP _YQ_EX
+    _YQ_WP="$(wslutil_info_yq_str "${INFO_WSLCONFIG_WIN:-}")"
+    _YQ_LP="$(wslutil_info_yq_str "${INFO_WSLCONFIG_WSL:-}")"
+    _YQ_EX="$( [[ "${INFO_WSLCONFIG_EXISTS:-0}" == 1 ]] && echo true || echo false )"
+    yq eval -i \
+        '.host.wslconfig.windowsPath = (strenv(_YQ_WP) | select(. != "null") // null) |
+         .host.wslconfig.wslPath = (strenv(_YQ_LP) | select(. != "null") // null) |
+         .host.wslconfig.exists = (strenv(_YQ_EX) == "true")' "$tmp"
+
+    while IFS=$'\t' read -r section key value def; do
+        [[ -n "${section:-}" ]] || continue
+        export _YQ_S="$section" _YQ_K="$key" _YQ_V="$value" _YQ_D="$def"
+        yq eval -i \
+            '.host.wslconfig.sections[strenv(_YQ_S)][strenv(_YQ_K)] = {"value": strenv(_YQ_V), "default": strenv(_YQ_D)}' "$tmp"
+    done <<<"${INFO_WSLCONFIG_LINES:-}"
+
+    _YQ_WP="$(wslutil_info_yq_str "${INFO_WSLGCONFIG_WIN:-}")"
+    _YQ_LP="$(wslutil_info_yq_str "${INFO_WSLGCONFIG_WSL:-}")"
+    _YQ_EX="$( [[ "${INFO_WSLGCONFIG_EXISTS:-0}" == 1 ]] && echo true || echo false )"
+    yq eval -i \
+        '.host.wslgconfig.windowsPath = (strenv(_YQ_WP) | select(. != "null") // null) |
+         .host.wslgconfig.wslPath = (strenv(_YQ_LP) | select(. != "null") // null) |
+         .host.wslgconfig.exists = (strenv(_YQ_EX) == "true")' "$tmp"
+
+    while IFS=$'\t' read -r _s key value; do
+        [[ -n "${key:-}" ]] || continue
+        export _YQ_K="$key" _YQ_V="$value"
+        yq eval -i \
+            '.host.wslgconfig.sections["system-distro-env"][strenv(_YQ_K)] = strenv(_YQ_V)' "$tmp"
+    done <<<"${INFO_WSLG_LINES:-}"
+
+    export _YQ_N _YQ_ST _YQ_VHDW _YQ_VHDL _YQ_CUR _YQ_DEFL _YQ_VER _YQ_UID
+    _YQ_N="$(wslutil_info_yq_str "${INFO_DISTRO_NAME:-}")"
+    _YQ_ST="$(wslutil_info_yq_str "${INFO_DISTRO_STATE:-}")"
+    _YQ_VHDW="$(wslutil_info_yq_str "${INFO_DISTRO_VHD_WIN:-}")"
+    _YQ_VHDL="$(wslutil_info_yq_str "${INFO_DISTRO_VHD_WSL:-}")"
+    _YQ_CUR="$( [[ "${INFO_DISTRO_CURRENT:-0}" == 1 ]] && echo true || echo false )"
+    _YQ_DEFL="$( [[ "${INFO_DISTRO_DEFAULT:-0}" == 1 ]] && echo true || echo false )"
+    if [[ -n "${INFO_DISTRO_VER:-}" ]]; then
+        _YQ_VER="${INFO_DISTRO_VER}"
+    else
+        _YQ_VER="null"
+    fi
+    if [[ -n "${INFO_DISTRO_UID:-}" ]]; then
+        _YQ_UID="${INFO_DISTRO_UID}"
+    else
+        _YQ_UID="null"
+    fi
+    yq eval -i \
+        '.distro.name = (strenv(_YQ_N) | select(. != "null") // null) |
+         .distro.current = (strenv(_YQ_CUR) == "true") |
+         .distro.default = (strenv(_YQ_DEFL) == "true") |
+         .distro.state = (strenv(_YQ_ST) | select(. != "null") // null) |
+         .distro.wslVersion = (strenv(_YQ_VER) | select(. != "null") | tonumber) // null |
+         .distro.vhd.windowsPath = (strenv(_YQ_VHDW) | select(. != "null") // null) |
+         .distro.vhd.wslPath = (strenv(_YQ_VHDL) | select(. != "null") // null) |
+         .distro.defaultUid = (strenv(_YQ_UID) | select(. != "null") | tonumber) // null' "$tmp"
+
+    if [[ "${INFO_WSLCONF_AVAILABLE:-0}" == 1 ]]; then
+        export _YQ_P
+        _YQ_P="${INFO_WSLCONF_PATH:-}"
+        yq eval -i \
+            '.distro.wslconf = {"available": true, "path": strenv(_YQ_P), "exists": true, "sections": {}}' "$tmp"
+        while IFS=$'\t' read -r section key value def; do
+            [[ -n "${section:-}" ]] || continue
+            export _YQ_S="$section" _YQ_K="$key" _YQ_V="$value" _YQ_D="$def"
+            yq eval -i \
+                '.distro.wslconf.sections[strenv(_YQ_S)][strenv(_YQ_K)] = {"value": strenv(_YQ_V), "default": strenv(_YQ_D)}' "$tmp"
+        done <<<"${INFO_WSLCONF_LINES:-}"
+    else
+        export _YQ_R
+        _YQ_R="${INFO_WSLCONF_REASON:-unavailable}"
+        yq eval -i \
+            '.distro.wslconf = {"available": false, "reason": strenv(_YQ_R)}' "$tmp"
+    fi
+
+    yq eval -o json '.' "$tmp"
+    rm -f "$tmp"
+}
+
 wslutil_info_print_human_distro() {
     local name="$1" state="$2" ver="$3" def="$4"
     local cur=""

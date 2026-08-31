@@ -266,6 +266,32 @@ EOF
     [[ "$output" != *"-d Debian"* ]]
 }
 
+@test "--json has host and distro keys" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    export WSLUTIL_INFO_LXSS="$TEST_TEMP_DIR/lxss.tsv"
+    printf 'Ubuntu\tC:\\Users\\foo\\LocalState\t2\t1000\n' >"$WSLUTIL_INFO_LXSS"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --json
+    [ "$status" -eq 0 ]
+    echo "$output" | yq eval '.host.versions.wsl' - | grep -q '2.7.12.0'
+    echo "$output" | yq eval '.host.runtime.networkingMode' - | grep -q 'mirrored'
+    echo "$output" | yq eval '.distro.name' - | grep -q 'Ubuntu'
+}
+
+@test "live wslutil info --json parses" {
+    skip_if_not_wsl
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --json
+    [ "$status" -eq 0 ]
+    echo "$output" | yq eval '.host' - >/dev/null
+    echo "$output" | yq eval '.distro' - >/dev/null
+}
+
 @test "bootstrap does not log [INFO] to stdout when WIN_USERPROFILE unset" {
     make_fakebin
     export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"

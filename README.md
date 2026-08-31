@@ -43,6 +43,7 @@ wslutil doctor                # Check system health
 | Command | Purpose |
 |---------|---------|
 | `wslutil doctor` | Run comprehensive health checks |
+| `wslutil info` | Show WSL versions, live networking, config paths, distro VHD path |
 | `wslutil shellenv` | Output shell environment setup commands |
 | `wslutil setup exes` | Create Windows executable shims |
 | `wslutil setup windows` | Merge Windows WSL settings (optional) |
@@ -54,6 +55,9 @@ wslutil doctor                # Check system health
 
 ```bash
 wslutil doctor                    # Check system health
+wslutil info                      # Host + this distro
+wslutil info --json               # Same tree as JSON
+wslutil info --distro Debian      # Host + named distro (no start/mount)
 eval "$(wslutil shellenv)"        # Set up environment
 wslutil setup exes                # Create Windows exe shims
 wslutil uptime                    # Show WSL distro uptime
