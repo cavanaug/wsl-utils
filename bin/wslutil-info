@@ -105,6 +105,7 @@ if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
         DISTRO_UNAVAILABLE="could not list distros"
     elif row="$(wslutil_info_resolve_distro "$target")"; then
         IFS=$'\t' read -r dname dstate dver ddef <<<"$row"
+        INFO_DISTRO_AVAILABLE=1
         wslutil_info_collect_distro_fields "$dname" "$dstate" "$dver" "$ddef"
     else
         echo "wslutil-info: unknown distro: $target" >&2
@@ -114,6 +115,10 @@ if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
             echo "  $dname" >&2
         done
         exit 1
+    fi
+    if [[ -n "$DISTRO_UNAVAILABLE" ]]; then
+        INFO_DISTRO_AVAILABLE=0
+        INFO_DISTRO_REASON="$DISTRO_UNAVAILABLE"
     fi
 fi
 

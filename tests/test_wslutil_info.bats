@@ -304,3 +304,80 @@ EOF
     [[ "$output" != *"[INFO]"* ]]
     [[ "$output" != *"Bootstrapping"* ]]
 }
+
+@test "collect_host_config leaves paths empty without WIN_USERPROFILE" {
+    unset WIN_USERPROFILE
+    wslutil_info_collect_host_config
+    [ -z "${INFO_WSLCONFIG_WIN:-}" ]
+    [ -z "${INFO_WSLCONFIG_WSL:-}" ]
+    [ -z "${INFO_WSLGCONFIG_WIN:-}" ]
+    [ -z "${INFO_WSLGCONFIG_WSL:-}" ]
+    [ "${INFO_WSLCONFIG_EXISTS:-1}" -eq 0 ]
+}
+
+@test "json null host paths when WIN_USERPROFILE unset" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSLUTIL_INFO_SKIP_DISTRO=1
+    unset WIN_USERPROFILE WIN_LOCALAPPDATA WIN_APPDATA
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.host.wslconfig.windowsPath' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.host.wslconfig.wslPath' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.host.wslgconfig.windowsPath' -)" = "null" ]
+    [[ "$output" != *'"windowsPath": "unavailable"'* ]]
+    [[ "$output" != *'"wslPath": "unavailable"'* ]]
+}
+
+@test "json distro unavailable when WSL_DISTRO_NAME unset" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    unset WSL_DISTRO_NAME
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.distro.available' -)" = "false" ]
+    echo "$output" | yq eval '.distro.reason' - | grep -q 'WSL_DISTRO_NAME unset'
+    [ "$(echo "$output" | yq eval '.distro.wslconf.available' -)" = "false" ]
+    echo "$output" | yq eval '.distro.wslconf.reason' - | grep -q 'WSL_DISTRO_NAME unset'
+    [ "$(echo "$output" | yq eval '.distro.name' -)" = "null" ]
+}
+
+@test "json distro unavailable when list fails" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    make_fakebin_list_fail
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.distro.available' -)" = "false" ]
+    echo "$output" | yq eval '.distro.reason' - | grep -q 'could not list distros'
+    [ "$(echo "$output" | yq eval '.distro.wslconf.available' -)" = "false" ]
+}
+
+@test "json wslconf exists false when file missing" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    INFO_DISTRO_AVAILABLE=1
+    INFO_DISTRO_NAME="TestDistro"
+    INFO_DISTRO_STATE="Running"
+    INFO_DISTRO_CURRENT=1
+    INFO_WSLCONF_AVAILABLE=1
+    INFO_WSLCONF_EXISTS=0
+    INFO_WSLCONF_PATH="$TEST_TEMP_DIR/missing-wsl.conf"
+    INFO_WSLCONF_LINES=""
+    run wslutil_info_emit_json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.distro.wslconf.available' -)" = "true" ]
+    [ "$(echo "$output" | yq eval '.distro.wslconf.exists' -)" = "false" ]
+    [ "$(echo "$output" | yq eval '.distro.wslconf.path' -)" = "$TEST_TEMP_DIR/missing-wsl.conf" ]
+}
