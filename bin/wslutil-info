@@ -48,6 +48,7 @@ EOF
 
 JSON=0
 DISTRO=""
+DISTRO_FLAG_SET=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
     --help)
@@ -59,6 +60,7 @@ while [[ $# -gt 0 ]]; do
         shift
         ;;
     --distro)
+        DISTRO_FLAG_SET=1
         if [[ $# -lt 2 ]]; then
             echo "wslutil-info: --distro requires a name" >&2
             show_help >&2
@@ -68,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         shift 2
         ;;
     --distro=*)
+        DISTRO_FLAG_SET=1
         DISTRO="${1#--distro=}"
         shift
         ;;
@@ -78,6 +81,12 @@ while [[ $# -gt 0 ]]; do
         ;;
     esac
 done
+
+if [[ "$DISTRO_FLAG_SET" -eq 1 && -z "$DISTRO" ]]; then
+    echo "wslutil-info: --distro requires a non-empty name" >&2
+    show_help >&2
+    exit 1
+fi
 
 if [[ "$JSON" -eq 1 ]] && ! command -v yq >/dev/null 2>&1; then
     echo "wslutil-info: --json requires yq" >&2
@@ -130,14 +139,16 @@ fi
 wslutil_info_print_human_host_versions
 wslutil_info_print_human_runtime
 if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
-    wslutil_info_print_human_ini_block ".wslconfig" "${INFO_WSLCONFIG_WIN:-unavailable}" "${INFO_WSLCONFIG_WSL:-unavailable}" wslconfig "${INFO_WSLCONFIG_WSL:-unavailable}"
-    wslutil_info_print_human_wslg "${INFO_WSLGCONFIG_WIN:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}"
+    wslutil_info_print_human_ini_block ".wslconfig" "${INFO_WSLCONFIG_WIN:-unavailable}" "${INFO_WSLCONFIG_WSL:-unavailable}" \
+        "${INFO_WSLCONFIG_LINES:-}" "${INFO_WSLCONFIG_UNAVAIL_REASON:-}" "${INFO_WSLCONFIG_EXISTS:-0}"
+    wslutil_info_print_human_wslg "${INFO_WSLGCONFIG_WIN:-unavailable}" "${INFO_WSLGCONFIG_WSL:-unavailable}" \
+        "${INFO_WSLG_LINES:-}" "${INFO_WSLG_UNAVAIL_REASON:-}" "${INFO_WSLGCONFIG_EXISTS:-0}"
 fi
 if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
     if [[ -n "$DISTRO_UNAVAILABLE" ]]; then
         printf '== Distro ==\n  unavailable (%s)\n' "$DISTRO_UNAVAILABLE"
     else
-        wslutil_info_print_human_distro "${INFO_DISTRO_NAME}" "${INFO_DISTRO_STATE}" "${INFO_DISTRO_VER}" "$([[ "${INFO_DISTRO_DEFAULT:-0}" == 1 ]] && echo yes || echo no)"
+        wslutil_info_print_human_distro
     fi
 fi
 exit 0

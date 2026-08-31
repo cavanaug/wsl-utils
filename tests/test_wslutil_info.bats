@@ -168,6 +168,30 @@ EOF
     [[ "$output" =~ "Ubuntu" ]]
 }
 
+@test "empty --distro= exits 1" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --distro=
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "non-empty name" ]]
+}
+
+@test "empty --distro \"\" exits 1" {
+    make_fakebin
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info" --distro ""
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "non-empty name" ]]
+}
+
 @test "distro block includes VHD path from Lxss TSV" {
     make_fakebin
     export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
@@ -380,4 +404,54 @@ EOF
     [ "$(echo "$output" | yq eval '.distro.wslconf.available' -)" = "true" ]
     [ "$(echo "$output" | yq eval '.distro.wslconf.exists' -)" = "false" ]
     [ "$(echo "$output" | yq eval '.distro.wslconf.path' -)" = "$TEST_TEMP_DIR/missing-wsl.conf" ]
+}
+
+@test "json wslconfig unavailable when crudini missing but file exists" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    INFO_WSLCONFIG_WIN="C:\\Users\\foo\\.wslconfig"
+    INFO_WSLCONFIG_WSL="$TEST_TEMP_DIR/.wslconfig"
+    INFO_WSLCONFIG_EXISTS=1
+    INFO_WSLCONFIG_LINES=""
+    INFO_WSLCONFIG_UNAVAIL_REASON="need crudini"
+    touch "$INFO_WSLCONFIG_WSL"
+    run wslutil_info_emit_json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.host.wslconfig.exists' -)" = "true" ]
+    [ "$(echo "$output" | yq eval '.host.wslconfig.unavailable' -)" = "true" ]
+    echo "$output" | yq eval '.host.wslconfig.reason' - | grep -q 'need crudini'
+    [ "$(echo "$output" | yq eval '.host.wslconfig.sections | length' -)" = "0" ]
+}
+
+@test "json wslconf unavailable when crudini missing but file exists" {
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    INFO_DISTRO_AVAILABLE=1
+    INFO_DISTRO_NAME="TestDistro"
+    INFO_DISTRO_STATE="Running"
+    INFO_DISTRO_CURRENT=1
+    INFO_WSLCONF_AVAILABLE=1
+    INFO_WSLCONF_EXISTS=1
+    INFO_WSLCONF_PATH="$TEST_TEMP_DIR/wsl.conf"
+    INFO_WSLCONF_LINES=""
+    INFO_WSLCONF_UNAVAIL_REASON="need crudini"
+    touch "$INFO_WSLCONF_PATH"
+    run wslutil_info_emit_json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.distro.wslconf.exists' -)" = "true" ]
+    [ "$(echo "$output" | yq eval '.distro.wslconf.unavailable' -)" = "true" ]
+    echo "$output" | yq eval '.distro.wslconf.reason' - | grep -q 'need crudini'
+    [ "$(echo "$output" | yq eval '.distro.wslconf.sections | length' -)" = "0" ]
+}
+
+@test "collect_host_config sets crudini reason when file exists without crudini" {
+    command -v crudini >/dev/null 2>&1 && skip "crudini installed; json emit test covers unavailable reason"
+    export WIN_USERPROFILE="$TEST_TEMP_DIR/winhome"
+    mkdir -p "$WIN_USERPROFILE"
+    cat >"$WIN_USERPROFILE/.wslconfig" <<'EOF'
+[wsl2]
+memory=4GB
+EOF
+    wslutil_info_collect_host_config
+    [ "${INFO_WSLCONFIG_EXISTS:-0}" -eq 1 ]
+    [ "${INFO_WSLCONFIG_UNAVAIL_REASON:-}" = "need crudini" ]
+    [ -z "${INFO_WSLCONFIG_LINES:-}" ]
 }

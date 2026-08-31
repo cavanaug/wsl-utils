@@ -214,22 +214,21 @@ wslutil_info_filter_wslgconfig() {
 }
 
 wslutil_info_print_human_ini_block() {
-    local title="$1" winpath="$2" wslpath="$3" kind="$4" path="$5"
+    local title="$1" winpath="$2" wslpath="$3" lines="${4:-}" unavail_reason="${5:-}"
+    local exists="${6:-0}"
     printf '%s\n' "$title"
     printf '  windows: %s\n' "$winpath"
     printf '  wsl:     %s\n' "$wslpath"
-    if [[ ! -e "$path" ]]; then
+    if [[ "$exists" != 1 ]]; then
         printf '  exists:  no\n'
         printf '  (all defaults)\n'
         return 0
     fi
     printf '  exists:  yes\n'
-    if ! command -v crudini >/dev/null 2>&1; then
+    if [[ -n "$unavail_reason" ]]; then
         printf '  unavailable (need crudini)\n'
         return 0
     fi
-    local lines
-    lines="$(wslutil_info_filter_ini_file "$kind" "$path")"
     if [[ -z "$lines" ]]; then
         printf '  (all defaults)\n'
         return 0
@@ -249,22 +248,21 @@ wslutil_info_print_human_ini_block() {
 }
 
 wslutil_info_print_human_wslg() {
-    local winpath="$1" wslpath="$2" path="$3"
+    local winpath="$1" wslpath="$2" lines="${3:-}" unavail_reason="${4:-}"
+    local exists="${5:-0}"
     printf '.wslgconfig\n'
     printf '  windows: %s\n' "$winpath"
     printf '  wsl:     %s\n' "$wslpath"
-    if [[ ! -e "$path" ]]; then
+    if [[ "$exists" != 1 ]]; then
         printf '  exists:  no\n'
         printf '  (all defaults)\n'
         return 0
     fi
     printf '  exists:  yes\n'
-    if ! command -v crudini >/dev/null 2>&1; then
+    if [[ -n "$unavail_reason" ]]; then
         printf '  unavailable (need crudini)\n'
         return 0
     fi
-    local lines
-    lines="$(wslutil_info_filter_wslgconfig "$path")"
     if [[ -z "$lines" ]]; then
         printf '  (all defaults)\n'
         return 0
@@ -362,10 +360,12 @@ wslutil_info_collect_host_config() {
     INFO_WSLCONFIG_WSL=""
     INFO_WSLCONFIG_EXISTS=0
     INFO_WSLCONFIG_LINES=""
+    INFO_WSLCONFIG_UNAVAIL_REASON=""
     INFO_WSLGCONFIG_WIN=""
     INFO_WSLGCONFIG_WSL=""
     INFO_WSLGCONFIG_EXISTS=0
     INFO_WSLG_LINES=""
+    INFO_WSLG_UNAVAIL_REASON=""
     if [[ -n "${WIN_USERPROFILE:-}" ]]; then
         INFO_WSLCONFIG_WSL="$WIN_USERPROFILE/.wslconfig"
         INFO_WSLGCONFIG_WSL="$WIN_USERPROFILE/.wslgconfig"
@@ -374,11 +374,19 @@ wslutil_info_collect_host_config() {
     fi
     if [[ -e "${INFO_WSLCONFIG_WSL:-}" ]]; then
         INFO_WSLCONFIG_EXISTS=1
-        INFO_WSLCONFIG_LINES="$(wslutil_info_filter_ini_file wslconfig "$INFO_WSLCONFIG_WSL")"
+        if command -v crudini >/dev/null 2>&1; then
+            INFO_WSLCONFIG_LINES="$(wslutil_info_filter_ini_file wslconfig "$INFO_WSLCONFIG_WSL")"
+        else
+            INFO_WSLCONFIG_UNAVAIL_REASON="need crudini"
+        fi
     fi
     if [[ -e "${INFO_WSLGCONFIG_WSL:-}" ]]; then
         INFO_WSLGCONFIG_EXISTS=1
-        INFO_WSLG_LINES="$(wslutil_info_filter_wslgconfig "$INFO_WSLGCONFIG_WSL")"
+        if command -v crudini >/dev/null 2>&1; then
+            INFO_WSLG_LINES="$(wslutil_info_filter_wslgconfig "$INFO_WSLGCONFIG_WSL")"
+        else
+            INFO_WSLG_UNAVAIL_REASON="need crudini"
+        fi
     fi
 }
 
@@ -408,19 +416,28 @@ wslutil_info_collect_distro_fields() {
     INFO_WSLCONF_PATH=""
     INFO_WSLCONF_LINES=""
     INFO_WSLCONF_REASON="unavailable"
+    INFO_WSLCONF_UNAVAIL_REASON=""
     if [[ "$name" == "${WSL_DISTRO_NAME:-}" ]]; then
         INFO_WSLCONF_PATH="/etc/wsl.conf"
         INFO_WSLCONF_AVAILABLE=1
         if [[ -e "$INFO_WSLCONF_PATH" ]]; then
             INFO_WSLCONF_EXISTS=1
-            INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+            if command -v crudini >/dev/null 2>&1; then
+                INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+            else
+                INFO_WSLCONF_UNAVAIL_REASON="need crudini"
+            fi
         fi
     elif [[ "${state,,}" == "running" ]]; then
         INFO_WSLCONF_PATH="$(wslpath -u "\\\\wsl.localhost\\${name}\\etc\\wsl.conf" 2>/dev/null || true)"
         if [[ -n "$INFO_WSLCONF_PATH" && -r "$INFO_WSLCONF_PATH" ]]; then
             INFO_WSLCONF_AVAILABLE=1
             INFO_WSLCONF_EXISTS=1
-            INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+            if command -v crudini >/dev/null 2>&1; then
+                INFO_WSLCONF_LINES="$(wslutil_info_filter_ini_file wslconf "$INFO_WSLCONF_PATH")"
+            else
+                INFO_WSLCONF_UNAVAIL_REASON="need crudini"
+            fi
         else
             INFO_WSLCONF_REASON="unreadable"
         fi
@@ -485,6 +502,14 @@ wslutil_info_emit_json() {
          .host.wslconfig.wslPath = (strenv(_YQ_LP) | select(. != "null") // null) |
          .host.wslconfig.exists = (strenv(_YQ_EX) == "true")' "$tmp"
 
+    if [[ -n "${INFO_WSLCONFIG_UNAVAIL_REASON:-}" ]]; then
+        export _YQ_R
+        _YQ_R="$INFO_WSLCONFIG_UNAVAIL_REASON"
+        yq eval -i \
+            '.host.wslconfig.unavailable = true |
+             .host.wslconfig.reason = strenv(_YQ_R)' "$tmp"
+    fi
+
     while IFS=$'\t' read -r section key value def; do
         [[ -n "${section:-}" ]] || continue
         export _YQ_S="$section" _YQ_K="$key" _YQ_V="$value" _YQ_D="$def"
@@ -499,6 +524,14 @@ wslutil_info_emit_json() {
         '.host.wslgconfig.windowsPath = (strenv(_YQ_WP) | select(. != "null") // null) |
          .host.wslgconfig.wslPath = (strenv(_YQ_LP) | select(. != "null") // null) |
          .host.wslgconfig.exists = (strenv(_YQ_EX) == "true")' "$tmp"
+
+    if [[ -n "${INFO_WSLG_UNAVAIL_REASON:-}" ]]; then
+        export _YQ_R
+        _YQ_R="$INFO_WSLG_UNAVAIL_REASON"
+        yq eval -i \
+            '.host.wslgconfig.unavailable = true |
+             .host.wslgconfig.reason = strenv(_YQ_R)' "$tmp"
+    fi
 
     while IFS=$'\t' read -r _s key value; do
         [[ -n "${key:-}" ]] || continue
@@ -549,6 +582,13 @@ wslutil_info_emit_json() {
             _YQ_EX="$( [[ "${INFO_WSLCONF_EXISTS:-0}" == 1 ]] && echo true || echo false )"
             yq eval -i \
                 '.distro.wslconf = {"available": true, "path": strenv(_YQ_P), "exists": (strenv(_YQ_EX) == "true"), "sections": {}}' "$tmp"
+            if [[ -n "${INFO_WSLCONF_UNAVAIL_REASON:-}" ]]; then
+                export _YQ_R
+                _YQ_R="$INFO_WSLCONF_UNAVAIL_REASON"
+                yq eval -i \
+                    '.distro.wslconf.unavailable = true |
+                     .distro.wslconf.reason = strenv(_YQ_R)' "$tmp"
+            fi
             while IFS=$'\t' read -r section key value def; do
                 [[ -n "${section:-}" ]] || continue
                 export _YQ_S="$section" _YQ_K="$key" _YQ_V="$value" _YQ_D="$def"
@@ -568,49 +608,25 @@ wslutil_info_emit_json() {
 }
 
 wslutil_info_print_human_distro() {
-    local name="$1" state="$2" ver="$3" def="$4"
-    local cur=""
-    [[ "$name" == "${WSL_DISTRO_NAME:-}" ]] && cur=" (current)"
-    local base uid lxver vhd_win vhd_wsl lx
-    base=""
-    uid=""
-    lxver=""
-    if lx="$(wslutil_info_lxss_lookup "$name")"; then
-        IFS=$'\t' read -r base lxver uid <<<"$lx"
-    fi
-    vhd_win=""
-    vhd_wsl=""
-    if [[ -n "$base" ]]; then
-        vhd_win="${base}\\ext4.vhdx"
-        vhd_wsl="$(wslpath -u "$vhd_win" 2>/dev/null || true)"
-    fi
-    printf '== Distro: %s%s ==\n' "$name" "$cur"
-    printf '  state:      %s\n' "$state"
-    printf '  wsl:        %s\n' "$ver"
+    local cur="" def="no"
+    [[ "${INFO_DISTRO_CURRENT:-0}" == 1 ]] && cur=" (current)"
+    [[ "${INFO_DISTRO_DEFAULT:-0}" == 1 ]] && def="yes"
+    printf '== Distro: %s%s ==\n' "${INFO_DISTRO_NAME}" "$cur"
+    printf '  state:      %s\n' "${INFO_DISTRO_STATE}"
+    printf '  wsl:        %s\n' "${INFO_DISTRO_VER}"
     printf '  default:    %s\n' "$def"
-    printf '  vhd:        %s\n' "$(wslutil_info_or_unavail "$vhd_win")"
-    if [[ -n "$vhd_wsl" ]]; then
-        printf '  vhd (wsl):  %s\n' "$vhd_wsl"
+    printf '  vhd:        %s\n' "$(wslutil_info_or_unavail "${INFO_DISTRO_VHD_WIN:-}")"
+    if [[ -n "${INFO_DISTRO_VHD_WSL:-}" ]]; then
+        printf '  vhd (wsl):  %s\n' "${INFO_DISTRO_VHD_WSL}"
     else
         printf '  vhd (wsl):  unavailable\n'
     fi
-    printf '  defaultUid: %s\n' "$(wslutil_info_or_unavail "$uid")"
+    printf '  defaultUid: %s\n' "$(wslutil_info_or_unavail "${INFO_DISTRO_UID:-}")"
 
-    local confpath="" reason=""
-    if [[ "$name" == "${WSL_DISTRO_NAME:-}" ]]; then
-        confpath="/etc/wsl.conf"
-        wslutil_info_print_human_ini_block "wsl.conf" "$confpath" "$confpath" wslconf "$confpath"
+    if [[ "${INFO_WSLCONF_AVAILABLE:-0}" != 1 ]]; then
+        printf '  wsl.conf:   unavailable (%s)\n' "${INFO_WSLCONF_REASON:-unavailable}"
         return 0
     fi
-    if [[ "${state,,}" == "running" ]]; then
-        confpath="$(wslpath -u "\\\\wsl.localhost\\${name}\\etc\\wsl.conf" 2>/dev/null || true)"
-        if [[ -n "$confpath" && -r "$confpath" ]]; then
-            wslutil_info_print_human_ini_block "wsl.conf" "$confpath" "$confpath" wslconf "$confpath"
-            return 0
-        fi
-        reason="unreadable"
-    else
-        reason="distro not running"
-    fi
-    printf '  wsl.conf:   unavailable (%s)\n' "$reason"
+    wslutil_info_print_human_ini_block "wsl.conf" "${INFO_WSLCONF_PATH}" "${INFO_WSLCONF_PATH}" \
+        "${INFO_WSLCONF_LINES:-}" "${INFO_WSLCONF_UNAVAIL_REASON:-}" "${INFO_WSLCONF_EXISTS:-0}"
 }
