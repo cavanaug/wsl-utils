@@ -276,12 +276,8 @@ wslutil_info_print_human_wslg() {
     done <<<"$lines"
 }
 
-wslutil_info_list_distros() {
-    local ws u8 raw
-    ws="$(wslutil_info_cmd_wsl)"
-    u8="$(wslutil_info_cmd_win_utf8)"
-    raw="$("$ws" -l -v 2>/dev/null | "$u8" 2>/dev/null || true)"
-    printf '%s\n' "$raw" | awk '
+wslutil_info_parse_distro_list() {
+    awk '
         BEGIN { IGNORECASE=1 }
         NR==1 && /NAME/ { next }
         {
@@ -290,6 +286,32 @@ wslutil_info_list_distros() {
             name=$1; state=$(NF-1); ver=$NF
             print name "\t" state "\t" ver "\t" def
         }'
+}
+
+INFO_DISTRO_ROWS=()
+INFO_DISTRO_LIST_OK=0
+
+wslutil_info_collect_distro_list() {
+    INFO_DISTRO_ROWS=()
+    INFO_DISTRO_LIST_OK=0
+    local ws u8 raw
+    ws="$(wslutil_info_cmd_wsl)"
+    u8="$(wslutil_info_cmd_win_utf8)"
+    if ! raw="$("$ws" -l -v 2>/dev/null | "$u8" 2>/dev/null)"; then
+        return 0
+    fi
+    [[ -n "$raw" ]] || return 0
+    mapfile -t INFO_DISTRO_ROWS < <(printf '%s\n' "$raw" | wslutil_info_parse_distro_list)
+    [[ ${#INFO_DISTRO_ROWS[@]} -gt 0 ]] || return 0
+    INFO_DISTRO_LIST_OK=1
+}
+
+wslutil_info_list_distros() {
+    local ws u8 raw
+    ws="$(wslutil_info_cmd_wsl)"
+    u8="$(wslutil_info_cmd_win_utf8)"
+    raw="$("$ws" -l -v 2>/dev/null | "$u8" 2>/dev/null || true)"
+    printf '%s\n' "$raw" | wslutil_info_parse_distro_list
 }
 
 wslutil_info_lxss_lookup() {
@@ -321,15 +343,17 @@ wslutil_info_lxss_lookup() {
 wslutil_info_resolve_distro() {
     local want="${1:-${WSL_DISTRO_NAME:-}}"
     [[ -n "$want" ]] || return 1
+    if [[ ${#INFO_DISTRO_ROWS[@]} -eq 0 && INFO_DISTRO_LIST_OK -eq 0 ]]; then
+        wslutil_info_collect_distro_list
+    fi
     local row dname
-    while IFS= read -r row; do
-        [[ -n "$row" ]] || continue
+    for row in "${INFO_DISTRO_ROWS[@]}"; do
         IFS=$'\t' read -r dname _rest <<<"$row"
         if [[ "$dname" == "$want" ]]; then
             printf '%s\n' "$row"
             return 0
         fi
-    done < <(wslutil_info_list_distros)
+    done
     return 1
 }
 
@@ -355,6 +379,11 @@ wslutil_info_print_human_distro() {
     printf '  wsl:        %s\n' "$ver"
     printf '  default:    %s\n' "$def"
     printf '  vhd:        %s\n' "$(wslutil_info_or_unavail "$vhd_win")"
+    if [[ -n "$vhd_wsl" ]]; then
+        printf '  vhd (wsl):  %s\n' "$vhd_wsl"
+    else
+        printf '  vhd (wsl):  unavailable\n'
+    fi
     printf '  defaultUid: %s\n' "$(wslutil_info_or_unavail "$uid")"
 
     local confpath="" reason=""

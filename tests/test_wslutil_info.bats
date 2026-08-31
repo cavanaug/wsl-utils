@@ -180,8 +180,75 @@ EOF
     run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ext4.vhdx" ]]
+    [[ "$output" =~ "vhd (wsl):" ]]
+    [[ "$output" =~ "/mnt/c/" ]]
     [[ "$output" =~ "Ubuntu" ]]
     [[ "$output" =~ "Running" ]]
+}
+
+make_fakebin_list_fail() {
+    make_fakebin
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "--version" ]]; then
+    cat <<'VER'
+WSL version: 2.7.12.0
+Kernel version: 6.18.33.2-2
+WSLg version: 1.0.73.2
+MSRDC version: 1.2.7214
+Direct3D version: 1.611.1-81528511
+DXCore version: 10.0.26100.1-240331-1435.ge-release
+Windows version: 10.0.26200.9106
+VER
+    exit 0
+fi
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+    exit 1
+fi
+echo "unexpected: $*" >&2
+exit 1
+EOF
+    chmod +x "$FAKEBIN/wsl.exe"
+}
+
+@test "failed distro list prints unavailable and exits 0" {
+    make_fakebin_list_fail
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "unavailable" ]]
+    [[ "$output" =~ "could not list distros" ]]
+    [[ "$output" != *"unknown distro"* ]]
+}
+
+@test "empty distro list prints unavailable and exits 0" {
+    make_fakebin
+    cat >"$FAKEBIN/wsl.exe" <<'EOF'
+#!/bin/bash
+if [[ "$1" == "--version" ]]; then
+    echo "WSL version: 2.7.12.0"
+    exit 0
+fi
+if [[ "$1" == "-l" || "$1" == "--list" ]]; then
+    echo "  NAME      STATE           VERSION"
+    exit 0
+fi
+exit 1
+EOF
+    chmod +x "$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WSLINFO="$FAKEBIN/wslinfo"
+    export WSLUTIL_INFO_WSL="$FAKEBIN/wsl.exe"
+    export WSLUTIL_INFO_WIN_UTF8="cat"
+    export WSLUTIL_INFO_SKIP_CONFIG=1
+    export WSL_DISTRO_NAME="Ubuntu"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "could not list distros" ]]
+    [[ "$output" != *"unknown distro"* ]]
 }
 
 @test "stopped other distro does not call wsl.exe -d" {

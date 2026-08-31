@@ -115,29 +115,23 @@ if [[ "${WSLUTIL_INFO_SKIP_CONFIG:-0}" != 1 ]]; then
     wslutil_info_print_human_wslg "$win_wslg" "$local_wslg" "$local_wslg"
 fi
 if [[ "${WSLUTIL_INFO_SKIP_DISTRO:-0}" != 1 ]]; then
-    mapfile -t _info_dlist < <(wslutil_info_list_distros)
+    wslutil_info_collect_distro_list
     target="${DISTRO:-${WSL_DISTRO_NAME:-}}"
     if [[ -z "$target" ]]; then
         printf '== Distro ==\n  unavailable (WSL_DISTRO_NAME unset)\n'
+    elif [[ "$INFO_DISTRO_LIST_OK" -eq 0 ]]; then
+        printf '== Distro ==\n  unavailable (could not list distros)\n'
+    elif row="$(wslutil_info_resolve_distro "$target")"; then
+        IFS=$'\t' read -r dname dstate dver ddef <<<"$row"
+        wslutil_info_print_human_distro "$dname" "$dstate" "$dver" "$ddef"
     else
-        found=0
-        for row in "${_info_dlist[@]}"; do
-            IFS=$'\t' read -r dname dstate dver ddef <<<"$row"
-            if [[ "$dname" == "$target" ]]; then
-                found=1
-                break
-            fi
+        echo "wslutil-info: unknown distro: $target" >&2
+        echo "Available:" >&2
+        for row in "${INFO_DISTRO_ROWS[@]}"; do
+            IFS=$'\t' read -r dname _rest <<<"$row"
+            echo "  $dname" >&2
         done
-        if [[ "$found" -eq 0 ]]; then
-            echo "wslutil-info: unknown distro: $target" >&2
-            echo "Available:" >&2
-            for row in "${_info_dlist[@]}"; do
-                IFS=$'\t' read -r dname _rest <<<"$row"
-                echo "  $dname" >&2
-            done
-            exit 1
-        fi
-        wslutil_info_print_human_distro "$target" "$dstate" "$dver" "$ddef"
+        exit 1
     fi
 fi
 exit 0
