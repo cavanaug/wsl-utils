@@ -235,6 +235,35 @@ wslutil_list_print_human() {
 }
 
 wslutil_list_print_json() {
-    echo "wslutil-list: JSON not implemented" >&2
-    return 1
+    local tmp row name state ver def typ host hconf loc
+    tmp="$(mktemp)"
+    yq eval -n '[]' >"$tmp"
+    for row in "${LIST_ROWS[@]}"; do
+        IFS=$'\t' read -r name state ver def typ host hconf loc <<<"$row"
+        export _ln="$name" _ls="$state" _lv="$ver" _ld="$def" _lt="$typ" _lh="$host" _lc="$hconf" _ll="$loc"
+        if [[ "$LIST_WANT_LOCATION" -eq 1 ]]; then
+            yq eval -i '. += [{
+                "name": strenv(_ln),
+                "default": (strenv(_ld) == "yes"),
+                "state": strenv(_ls),
+                "wslVersion": (strenv(_lv) | select(. == "1" or . == "2") | tonumber // null),
+                "type": (strenv(_lt) | select(length > 0) // null),
+                "hostname": (strenv(_lh) | select(length > 0) // null),
+                "hostnameConfigured": (strenv(_lc) | select(length > 0) // null),
+                "location": (strenv(_ll) | select(length > 0) // null)
+            }]' "$tmp"
+        else
+            yq eval -i '. += [{
+                "name": strenv(_ln),
+                "default": (strenv(_ld) == "yes"),
+                "state": strenv(_ls),
+                "wslVersion": (strenv(_lv) | select(. == "1" or . == "2") | tonumber // null),
+                "type": (strenv(_lt) | select(length > 0) // null),
+                "hostname": (strenv(_lh) | select(length > 0) // null),
+                "hostnameConfigured": (strenv(_lc) | select(length > 0) // null)
+            }]' "$tmp"
+        fi
+    done
+    yq eval -o json "$tmp"
+    rm -f "$tmp"
 }

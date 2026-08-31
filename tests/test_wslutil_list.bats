@@ -164,3 +164,37 @@ EOF
     run "$BATS_TEST_DIRNAME/../bin/wslutil-list"
     [ "$status" -eq 1 ]
 }
+
+@test "--json is an array with type and hostnameConfigured" {
+    make_list_fakebin
+    seed_file_root
+    command -v yq >/dev/null 2>&1 || skip "need yq"
+    command -v crudini >/dev/null 2>&1 || skip "need crudini"
+    run "$BATS_TEST_DIRNAME/../bin/wslutil-list" --json
+    [ "$status" -eq 0 ]
+    [ "$(echo "$output" | yq eval '.[0].name' -)" = "Ubuntu" ]
+    [ "$(echo "$output" | yq eval '.[0].default' -)" = "true" ]
+    [ "$(echo "$output" | yq eval '.[0].state' -)" = "Running" ]
+    [ "$(echo "$output" | yq eval '.[0].wslVersion' -)" = "2" ]
+    [ "$(echo "$output" | yq eval '.[0].type' -)" = "Ubuntu 24.04.2 LTS" ]
+    [ "$(echo "$output" | yq eval '.[0].hostname' -)" = "mybox" ]
+    [ "$(echo "$output" | yq eval '.[0].hostnameConfigured' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.[0] | has("location")' -)" = "false" ]
+    [ "$(echo "$output" | yq eval '.[1].name' -)" = "debian" ]
+    [ "$(echo "$output" | yq eval '.[1].type' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.[1].hostname' -)" = "null" ]
+    [ "$(echo "$output" | yq eval '.[2].hostname' -)" = "alpine" ]
+    [ "$(echo "$output" | yq eval '.[2].hostnameConfigured' -)" = "devbox" ]
+}
+
+@test "--json without yq exits 1" {
+    make_list_fakebin
+    seed_file_root
+    local hide="$TEST_TEMP_DIR/hide"
+    mkdir -p "$hide"
+    run env PATH="$hide:$FAKEBIN:/bin:/usr/bin" WSLUTIL_LIST_WSL="$FAKEBIN/wsl.exe" \
+        WSLUTIL_LIST_WIN_UTF8="cat" WSLUTIL_LIST_FILE_ROOT="$WSLUTIL_LIST_FILE_ROOT" \
+        "$BATS_TEST_DIRNAME/../bin/wslutil-list" --json
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ yq ]]
+}
