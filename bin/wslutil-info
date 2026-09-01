@@ -254,33 +254,25 @@ wslutil_info_use_color() {
 
 wslutil_info_set_colors() {
     if wslutil_info_use_color; then
-        _C_H=$'\033[1;36m'
-        _C_S=$'\033[1m'
-        _C_K=$'\033[36m'
+        _C_H=$'\033[1;96m'
+        _C_S=$'\033[33m'
         _C_D=$'\033[2m'
-        _C_W=$'\033[33m'
         _C_R=$'\033[0m'
     else
-        _C_H="" _C_S="" _C_K="" _C_D="" _C_W="" _C_R=""
+        _C_H="" _C_S="" _C_D="" _C_R=""
     fi
 }
 
 wslutil_info_kv() {
-    local k="$1" v="$2"
-    if [[ "$v" == unavailable* ]]; then
-        printf '  %s%-18s%s%s%s%s\n' "${_C_K}" "$k" "${_C_R}" "${_C_W}" "$v" "${_C_R}"
-    else
-        printf '  %s%-18s%s%s\n' "${_C_K}" "$k" "${_C_R}" "$v"
-    fi
+    printf '  %-18s%s\n' "$1" "$2"
 }
 
 wslutil_info_print_human_host_versions() {
     printf '%s== Host ==%s\n' "${_C_H}" "${_C_R}"
-    wslutil_info_kv "uptime:" "$(wslutil_info_or_unavail "${INFO_HOST_UPTIME:-}")"
     printf '%sVersions%s\n' "${_C_S}" "${_C_R}"
     wslutil_info_kv "WSL:" "$(wslutil_info_or_unavail "${INFO_VER_WSL:-}")"
     if [[ -n "${INFO_VER_WSL:-}" && -n "${INFO_VER_WSL_EXE:-}" && "${INFO_VER_WSL}" != "${INFO_VER_WSL_EXE}" ]]; then
-        printf '  %s%-18s%s%s  (mismatch)%s\n' "${_C_K}" "WSL (exe):" "${_C_R}" "${_C_W}" "$INFO_VER_WSL_EXE" "${_C_R}"
+        printf '  %-18s%s  (mismatch)\n' "WSL (exe):" "$INFO_VER_WSL_EXE"
     fi
     wslutil_info_kv "Kernel:" "$(wslutil_info_or_unavail "${INFO_VER_KERNEL:-}")"
     wslutil_info_kv "WSLg:" "$(wslutil_info_or_unavail "${INFO_VER_WSLG:-}")"
@@ -292,6 +284,7 @@ wslutil_info_print_human_host_versions() {
 
 wslutil_info_print_human_runtime() {
     printf '%sRuntime%s\n' "${_C_S}" "${_C_R}"
+    wslutil_info_kv "uptime:" "$(wslutil_info_or_unavail "${INFO_HOST_UPTIME:-}")"
     wslutil_info_kv "networkingMode:" "$(wslutil_info_or_unavail "${INFO_RT_NET:-}")"
     wslutil_info_kv "configured:" "${INFO_RT_NET_CFG:-unset (default nat)}"
     wslutil_info_kv "vmId:" "$(wslutil_info_or_unavail "${INFO_RT_VMID:-}")"
@@ -341,7 +334,7 @@ wslutil_info_print_human_ini_block() {
     fi
     wslutil_info_kv "exists:" "yes"
     if [[ -n "$unavail_reason" ]]; then
-        printf '  %sunavailable (need crudini)%s\n' "${_C_W}" "${_C_R}"
+        printf '  unavailable (need crudini)\n'
         return 0
     fi
     if [[ -z "$lines" ]]; then
@@ -351,7 +344,7 @@ wslutil_info_print_human_ini_block() {
     local lastsec="" section key value def
     while IFS=$'\t' read -r section key value def; do
         if [[ "$section" != "$lastsec" ]]; then
-            printf '  %s[%s]%s\n' "${_C_K}" "$section" "${_C_R}"
+            printf '  [%s]\n' "$section"
             lastsec="$section"
         fi
         if [[ -n "$def" ]]; then
@@ -374,14 +367,14 @@ wslutil_info_print_human_wslg() {
     fi
     wslutil_info_kv "exists:" "yes"
     if [[ -n "$unavail_reason" ]]; then
-        printf '  %sunavailable (need crudini)%s\n' "${_C_W}" "${_C_R}"
+        printf '  unavailable (need crudini)\n'
         return 0
     fi
     if [[ -z "$lines" ]]; then
         printf '  %s(all defaults)%s\n' "${_C_D}" "${_C_R}"
         return 0
     fi
-    printf '  %s[system-distro-env]%s\n' "${_C_K}" "${_C_R}"
+    printf '  [system-distro-env]\n'
     local _s key value
     while IFS=$'\t' read -r _s key value; do
         printf '    %s = %s\n' "$key" "$value"
@@ -736,6 +729,7 @@ wslutil_info_print_human_distro() {
     [[ "${INFO_DISTRO_CURRENT:-0}" == 1 ]] && cur=" (current)"
     [[ "${INFO_DISTRO_DEFAULT:-0}" == 1 ]] && def="yes"
     printf '%s== Distro: %s%s ==%s\n' "${_C_H}" "${INFO_DISTRO_NAME}" "$cur" "${_C_R}"
+    printf '%sRuntime%s\n' "${_C_S}" "${_C_R}"
     wslutil_info_kv "uptime:" "$(wslutil_info_or_unavail "${INFO_DISTRO_UPTIME:-}")"
     wslutil_info_kv "state:" "${INFO_DISTRO_STATE}"
     wslutil_info_kv "wsl:" "${INFO_DISTRO_VER}"
@@ -744,7 +738,8 @@ wslutil_info_print_human_distro() {
     wslutil_info_kv "defaultUid:" "$(wslutil_info_or_unavail "${INFO_DISTRO_UID:-}")"
 
     if [[ "${INFO_WSLCONF_AVAILABLE:-0}" != 1 ]]; then
-        printf '  %s%-18s%s%sunavailable (%s)%s\n' "${_C_K}" "wsl.conf:" "${_C_R}" "${_C_W}" "${INFO_WSLCONF_REASON:-unavailable}" "${_C_R}"
+        printf '%swsl.conf%s\n' "${_C_S}" "${_C_R}"
+        printf '  unavailable (%s)\n' "${INFO_WSLCONF_REASON:-unavailable}"
         return 0
     fi
     wslutil_info_print_human_ini_block "wsl.conf" "${INFO_WSLCONF_PATH}" \

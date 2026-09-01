@@ -377,6 +377,9 @@ EOF
     [[ "$output" =~ "up 3:12" ]]
     [[ "$output" =~ $'\n\n== Distro:' ]]
     [[ "$output" != *"vhd (wsl):"* ]]
+    host="${output%%$'\n\n== Distro:'*}"
+    [[ "$host" =~ Runtime$'\n'"  uptime:" ]]
+    [[ "$host" != *"Versions"$'\n'"  uptime:"* ]]
 }
 
 @test "stopped other distro omits distro uptime from wslutil-uptime" {
@@ -408,7 +411,8 @@ EOF
     export WSLUTIL_INFO_COLOR=1
     run "$BATS_TEST_DIRNAME/../bin/wslutil-info"
     [ "$status" -eq 0 ]
-    [[ "$output" == *$'\033['* ]]
+    [[ "$output" == *$'\033[1;96m'* ]]
+    [[ "$output" == *$'\033[33m'* ]]
 }
 
 @test "live wslutil info --json parses" {
