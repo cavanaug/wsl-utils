@@ -8,8 +8,8 @@
 #  │    ╚███╔███╔╝██║██║ ╚████║      ╚██████╔╝██║     ███████╗██║ ╚████║    │
 #  │     ╚══╝╚══╝ ╚═╝╚═╝  ╚═══╝       ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝    │
 #  └────────────────────────────────────────────────────────────────────────┘
-#  - This script is used to open files or directories in Windows Explorer from WSL.
-#  - It takes any number of arguments, and if any of them are files or directories, it will convert them to Windpaths.
+#  - Open files, directories, or URLs with their default Windows application.
+#  - Exit status reports launch errors, not whether the application displayed the target.
 #  - It is equivalent to double-clicking on a file or directory in Windows.
 #
 set -euo pipefail
@@ -19,13 +19,45 @@ cliargs=()
 for i in "$@"; do
     if [[ -f $i || -d $i ]]; then
         # Anything that is a file or directory will be converted to a windows path
-        cliargs+=("file:$(wslpath -m ${i})")
+        if ! target=$(wslpath -w "$i"); then
+            printf 'win-open: unable to convert path: %s\n' "$i" >&2
+            exit 1
+        fi
+        cliargs+=("$target")
     else
         cliargs+=("${i}")
     fi
 done
 if [[ -n "${WSLUTIL_DEBUG:-}" ]]; then
-    mkdir -p ${HOME}/.local/state/wslutil
-    echo "win-open ${cliargs[@]}" >>${HOME}/.local/state/wslutil/win-open.log
+    mkdir -p "${HOME}/.local/state/wslutil"
+    echo "win-open ${cliargs[*]}" >>"${HOME}/.local/state/wslutil/win-open.log"
 fi
-"${WIN_WINDIR}/explorer.exe" "${cliargs[@]}"
+
+# Keep targets out of PowerShell source and Windows command-line quoting.
+# NUL-delimited UTF-8 preserves spaces, quotes, newlines, and non-ASCII paths.
+# shellcheck disable=SC2016 # Dollar expressions belong to PowerShell, not Bash.
+{
+    if (( ${#cliargs[@]} > 0 )); then
+        printf '%s\0' "${cliargs[@]}"
+    fi
+} | "${WIN_WINDIR}/System32/WindowsPowerShell/v1.0/powershell.exe" \
+    -NoLogo -NoProfile -NonInteractive -Command '
+    [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $data = [Console]::In.ReadToEnd()
+    if ($data.Length -eq 0) {
+        $targets = @("$env:WINDIR\explorer.exe")
+    } else {
+        $targets = $data.Substring(0, $data.Length - 1).Split([char]0)
+    }
+    $status = 0
+    foreach ($target in $targets) {
+        try {
+            Start-Process -FilePath $target -ErrorAction Stop
+        } catch {
+            [Console]::Error.WriteLine("win-open: {0}: {1}", $target, $_.Exception.Message)
+            $status = 1
+        }
+    }
+    exit $status
+'

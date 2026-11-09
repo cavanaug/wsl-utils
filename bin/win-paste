@@ -205,7 +205,9 @@ ps_try_image_png() {
     else
         win_out="$out"
     fi
-    WIN_PASTE_OUT="$win_out" "$(powershell_bin)" -NoProfile -Command \
+    # WSL only forwards explicitly listed environment variables to Windows.
+    WSLENV="${WSLENV:+$WSLENV:}WIN_PASTE_OUT" \
+        WIN_PASTE_OUT="$win_out" "$(powershell_bin)" -NoProfile -Command \
         'Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $img=[Windows.Forms.Clipboard]::GetImage(); if($null -eq $img){exit 1}; $img.Save($env:WIN_PASTE_OUT,[Drawing.Imaging.ImageFormat]::Png)' \
         2>/dev/null
     [[ -s "$out" ]]

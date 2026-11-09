@@ -26,6 +26,14 @@ if [[ "$args" == *Get-Clipboard*Html* ]] || [[ "$args" == *TextFormat.Html* ]]; 
 fi
 # Image save: real command uses Clipboard::GetImage + WIN_PASTE_OUT
 if [[ "$args" == *GetImage* ]] || [[ "$args" == *ImageFormat* ]]; then
+    if [[ -n "${WIN_PASTE_WSLENV_LOG:-}" ]]; then
+        printf '%s' "${WSLENV:-}" > "$WIN_PASTE_WSLENV_LOG"
+    fi
+    # Windows only receives variables explicitly forwarded through WSLENV.
+    case ":${WSLENV:-}:" in
+        *:WIN_PASTE_OUT:*|*:WIN_PASTE_OUT/w:*) ;;
+        *) exit 1 ;;
+    esac
     if [[ -n "${WIN_PASTE_IMAGE_FIXTURE:-}" && -f "${WIN_PASTE_IMAGE_FIXTURE}" && -n "${WIN_PASTE_OUT:-}" ]]; then
         dest="${WIN_PASTE_OUT}"
         # wslpath -w yields \\wsl.localhost\Distro\...; map back for bash cp
@@ -165,6 +173,41 @@ teardown() {
     run win-paste --file-path --format png
     [ "$status" -eq 0 ]
     [[ "$output" =~ -image-[0-9a-f]{12}\.png$ ]]
+}
+
+@test "win-paste forwards image output when WSLENV is unset or empty" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_IMAGE_FIXTURE="$TEST_TEMP_DIR/clip.png"
+    printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' >"$WIN_PASTE_IMAGE_FIXTURE"
+
+    for state in unset empty; do
+        if [[ "$state" == unset ]]; then
+            unset WSLENV
+        else
+            export WSLENV=""
+        fi
+
+        run win-paste --file-atpath --format png
+        [ "$status" -eq 0 ]
+        [[ "$output" == @/*-image-*.png ]]
+        cmp -s "$WIN_PASTE_IMAGE_FIXTURE" "${output#@}"
+        [ -z "${WSLENV:-}" ]
+    done
+}
+
+@test "win-paste preserves existing WSLENV entries when forwarding image output" {
+    export XDG_CACHE_HOME="$TEST_TEMP_DIR/xdg-cache"
+    export WIN_PASTE_IMAGE_FIXTURE="$TEST_TEMP_DIR/clip.png"
+    printf '\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82' >"$WIN_PASTE_IMAGE_FIXTURE"
+    export WSLENV="TERM:COLORTERM/p"
+    export WIN_PASTE_WSLENV_LOG="$TEST_TEMP_DIR/wslenv.log"
+
+    run win-paste --file-atpath --format png
+    [ "$status" -eq 0 ]
+    [[ "$output" == @/*-image-*.png ]]
+    cmp -s "$WIN_PASTE_IMAGE_FIXTURE" "${output#@}"
+    [ "$(cat "$WIN_PASTE_WSLENV_LOG")" = "TERM:COLORTERM/p:WIN_PASTE_OUT" ]
+    [ "$WSLENV" = "TERM:COLORTERM/p" ]
 }
 
 @test "win-paste --format jpeg is unsupported" {

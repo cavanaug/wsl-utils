@@ -43,6 +43,8 @@ if [[ -n "$_win_env" ]]; then
         "$_win_env" --refresh || true
     elif [[ -n $(find "$_cache" -mmin +60 2>/dev/null) ]]; then
         ("$_win_env" --refresh) &>/dev/null &
+        # Keep cache maintenance out of interactive job notifications.
+        disown "$!"
     fi
     unset _cache
 fi
